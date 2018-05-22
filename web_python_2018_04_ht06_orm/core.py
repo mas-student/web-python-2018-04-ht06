@@ -9,8 +9,12 @@ class BaseModel:
         if id != 0:
             record = self.first(id)
             if record:
-                print('R', record)
-                for name, value in zip([c[0] for c in self._columns()], record):
+                # print('R', record)
+                # for name, value in zip([c[0] for c in self._columns()], record):
+                #     setattr(self, name, value)
+                for (name, cls), value in zip([c for c in self._columns()], record):
+                    if type(cls) == type:
+                        value = cls.first(value)
                     setattr(self, name, value)
 
     @classmethod
@@ -23,7 +27,7 @@ class BaseModel:
 
     @classmethod
     def __create_table(cls, tablename):
-        print('TN', tablename)
+        # print('TN', tablename)
 
         # conn = connect()
         # c = conn.cursor()
@@ -33,7 +37,7 @@ class BaseModel:
             # c.execute('DROP TABLE {}'.format(tablename))
             query = 'DROP TABLE {}'.format(tablename)
             cls._execute(query)
-            print('DROP', tablename)
+            # print('DROP', tablename)
         except Exception as e:
             print(e)
 
@@ -41,28 +45,37 @@ class BaseModel:
             # Create table
             # c.execute('''CREATE TABLE ? (key text)''', (tablename, ))
             # query = '''CREATE TABLE {} (key text)'''.format(tablename)
+            columns = cls._columns()
+            for i in range(len(columns)):
+                # print(type(columns[i][1]), str(type(columns[i][1])))
+                if str(type(columns[i][1])) == "<class 'type'>": # FIXME
+                    columns[i] = columns[i][0], 'int'
+            # print('COLUMNS', columns)
             query = 'CREATE TABLE {}({})'.format(
                 tablename,
-                ', '.join(' '.join(v) for v in cls._columns()))
+                ', '.join(' '.join(v) for v in columns))
             # c.execute(query)
             cls._execute(query)
             print('CREATE', query)
         except Exception as e:
             print(e)
 
-        print('OK')
+        # print('OK')
         # conn.commit()
 
     @classmethod
     def _columns(cls):
         return [getattr(cls, name) for name in cls.__dict__.keys() if not name.startswith('__')]
 
-    def save(self):
+    def save(self, verbose=True):
         fields = OrderedDict()
-        print('ALL 1', self._execute('SELECT * FROM {}'.format(self._tablename())))
+        # print('ALL 1', self._execute('SELECT * FROM {}'.format(self._tablename())))
         for field in self._columns():
-            print('F', field)
-            fields[field[0]] = getattr(self, field[0])
+            # print('F', field)
+            value = getattr(self, field[0])
+            if isinstance(value, BaseModel):
+                value = value.id
+            fields[field[0]] = value
 
         if self.first(self.id):
             query = 'UPDATE {} SET {} WHERE id = {}'.format(
@@ -79,9 +92,10 @@ class BaseModel:
                 # self._tablename(),
                 # self.id
             )
-        print('SAVE', '"'+query+'"')
+        if verbose:
+            print('SAVE', '"'+query+'"')
         self._execute(query)
-        print('ALL 2', self._execute('SELECT * FROM {}'.format(self._tablename())))
+        # print('ALL 2', self._execute('SELECT * FROM {}'.format(self._tablename())))
 
     @classmethod
     def all(cls):
