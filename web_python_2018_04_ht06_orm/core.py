@@ -2,20 +2,56 @@ from collections import OrderedDict
 import sqlite3
 
 
+class Scheme:
+    def __init__(self):
+        self.__models = OrderedDict()
+
+    def add(self, model):
+        self.__models[model.__name__] = model
+
+    def migrate(self):
+        for name, model in self.__models.items():
+            model.migrate()
+
 class BaseModel:
 
-    def __init__(self, id=0):
+    def __init__(self, scheme=None, id=0, record=None, data=None):
         self.id = id
+        if scheme:
+            scheme.add(type(self))
         if id != 0:
             record = self.first(id)
             if record:
-                # print('R', record)
-                # for name, value in zip([c[0] for c in self._columns()], record):
+                self._load_from_record(record)
+                # # print('R', record)
+                # # for name, value in zip([c[0] for c in self._columns()], record):
+                # #     setattr(self, name, value)
+                # for (name, typedef), value in zip([c for c in self._columns()], record):
+                #     if type(typedef) == type:
+                #         value = typedef.first(value)
                 #     setattr(self, name, value)
-                for (name, cls), value in zip([c for c in self._columns()], record):
-                    if type(cls) == type:
-                        value = cls.first(value)
-                    setattr(self, name, value)
+        if record:
+            self._load_from_record(record)
+        if data:
+            self._load_from_data(data)
+
+    def _load_from_data(self, data):
+        # keys = data.keys()
+        # record = [data[key] for key in keys]
+        # self._load_from_record(record)
+
+        columnMap = dict(self._columns())
+        for key, value in data.items():
+            typedef = columnMap[key]
+            if type(typedef) == type:
+                value = typedef.first(value)
+            setattr(self, key, value)
+
+    def _load_from_record(self, record):
+        for (name, typedef), value in zip([c for c in self._columns()], record):
+            if type(typedef) == type:
+                value = typedef.first(value)
+            setattr(self, name, value)
 
     @classmethod
     def _execute(cls, query):
@@ -26,20 +62,20 @@ class BaseModel:
         return c.fetchall()
 
     @classmethod
-    def __create_table(cls, tablename):
+    def _create_table(cls, tablename):
         # print('TN', tablename)
 
         # conn = connect()
         # c = conn.cursor()
 
-        try:
-            # c.execute('DROP TABLE ?', (tablename, ))
-            # c.execute('DROP TABLE {}'.format(tablename))
-            query = 'DROP TABLE {}'.format(tablename)
-            cls._execute(query)
-            # print('DROP', tablename)
-        except Exception as e:
-            print(e)
+        # try:
+        #     # c.execute('DROP TABLE ?', (tablename, ))
+        #     # c.execute('DROP TABLE {}'.format(tablename))
+        #     query = 'DROP TABLE {}'.format(tablename)
+        #     cls._execute(query)
+        #     # print('DROP', tablename)
+        # except Exception as e:
+        #     print(e)
 
         try:
             # Create table
@@ -64,8 +100,19 @@ class BaseModel:
         # conn.commit()
 
     @classmethod
+    def _drop_table(cls, tablename):
+        try:
+            # c.execute('DROP TABLE ?', (tablename, ))
+            # c.execute('DROP TABLE {}'.format(tablename))
+            query = 'DROP TABLE {}'.format(tablename)
+            cls._execute(query)
+            # print('DROP', tablename)
+        except Exception as e:
+            print(e)
+
+    @classmethod
     def _columns(cls):
-        return [getattr(cls, name) for name in cls.__dict__.keys() if not name.startswith('__')]
+        return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
 
     def save(self, verbose=True):
         fields = OrderedDict()
@@ -115,7 +162,9 @@ class BaseModel:
     def migrate(cls):
         # tablename = self.__class__.__name__.lower()
         # self.__create_table(tablename)
-        cls.__create_table(cls._tablename())
+        # cls.__create_table(cls._tablename())
+        cls._drop_table(cls._tablename())
+        cls._create_table(cls._tablename())
 
 
 class FirstModel(BaseModel):

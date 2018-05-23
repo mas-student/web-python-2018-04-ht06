@@ -1,5 +1,5 @@
 from unittest import TestCase, mock
-from web_python_2018_04_ht06_orm.core import connect, table, BaseModel
+from web_python_2018_04_ht06_orm.core import connect, table, Scheme, BaseModel
 
 
 class TestSupModel(BaseModel):
@@ -42,29 +42,36 @@ class TestBaseModel(TestCase):
         self.assertEqual(m._columns(), [('id', 'int'), ('int1', 'int'), ('str1', 'text')])
 
     def test_save(self):
-        m1 = TestSupModel()
+        # scheme = Scheme()
+        # m1 = TestSupModel(scheme=scheme)
+        # scheme.migrate()
+        m1 = TestSupModel(data={'id': 3, 'int1': 45, 'str1': 'example'})
+        # m1 = TestSupModel(record=(3, 45, 'example'))
         m1.migrate()
-        m1.id = 3
-        m1.int1 = 45
-        m1.str1 = 'example'
+        # m1.id = 3
+        # m1.int1 = 45
+        # m1.str1 = 'example'
         m1.save()
         # self.assertEqual(m._fields(), [('int1', 'int'), ('str1', 'text')])
         self.assertEqual(m1.all(), [(3, 45, 'example')])
 
-        m2 = TestSupModel(3)
+        m2 = TestSupModel(id=3)
         m2.int1 = 17
         m2.save()
         self.assertEqual(m2.all(), [(3, 17, 'example')])
 
     def test_init(self):
-        m1 = TestSupModel()
-        m1.migrate()
+        scheme = Scheme()
+        m1 = TestSupModel(scheme=scheme)
+        scheme.migrate()
+        # m1 = TestSupModel()
+        # m1.migrate()
         m1.id = 3
         m1.int1 = 45
         m1.str1 = 'example'
         m1.save()
         # self.assertEqual(m._fields(), [('int1', 'int'), ('str1', 'text')])
-        m2 = TestSupModel(3)
+        m2 = TestSupModel(id=3)
         self.assertEqual(m2.int1, 45)
         self.assertEqual(m2.str1, 'example')
 
