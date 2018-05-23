@@ -2,6 +2,9 @@ from collections import OrderedDict
 import sqlite3
 
 
+def escape():
+    pass
+
 class Scheme:
     def __init__(self):
         self.__models = OrderedDict()
@@ -12,6 +15,40 @@ class Scheme:
     def migrate(self):
         for name, model in self.__models.items():
             model.migrate()
+
+
+class FieldDefinition:
+    pass
+
+
+class QuerySet:
+
+    def __init__(self, tablename, definitions):
+        self._tablename = tablename
+        self._fieldnames = []
+        for definition in definitions:
+            if type(definition) == tuple:
+                self._fieldnames.append(definition[0])
+
+    @property
+    def names(self):
+        return self._fieldnames
+
+    @property
+    def _sql(self):
+        return 'SELECT {} FROM {}'.format(', '.join(self._fieldnames), self._tablename)
+
+    @classmethod
+    def _execute(cls, query):
+        conn = connect()
+        c = conn.cursor()
+        c.execute(query)
+        conn.commit()
+        return c.fetchall()
+
+    def all(self):
+        return self._execute(self._sql)
+
 
 class BaseModel:
 
@@ -40,7 +77,7 @@ class BaseModel:
         # record = [data[key] for key in keys]
         # self._load_from_record(record)
 
-        columnMap = dict(self._columns())
+        columnMap = dict(self._field_definitions())
         for key, value in data.items():
             typedef = columnMap[key]
             if type(typedef) == type:
@@ -48,7 +85,7 @@ class BaseModel:
             setattr(self, key, value)
 
     def _load_from_record(self, record):
-        for (name, typedef), value in zip([c for c in self._columns()], record):
+        for (name, typedef), value in zip([c for c in self._field_definitions()], record):
             if type(typedef) == type:
                 value = typedef.first(value)
             setattr(self, name, value)
@@ -81,7 +118,7 @@ class BaseModel:
             # Create table
             # c.execute('''CREATE TABLE ? (key text)''', (tablename, ))
             # query = '''CREATE TABLE {} (key text)'''.format(tablename)
-            columns = cls._columns()
+            columns = cls._field_definitions()
             for i in range(len(columns)):
                 # print(type(columns[i][1]), str(type(columns[i][1])))
                 if str(type(columns[i][1])) == "<class 'type'>": # FIXME
@@ -111,13 +148,16 @@ class BaseModel:
             print(e)
 
     @classmethod
-    def _columns(cls):
+    def _field_definitions(cls):
         return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+
+    def query(self, *definitions):
+        return QuerySet(self._tablename(), definitions)
 
     def save(self, verbose=True):
         fields = OrderedDict()
         # print('ALL 1', self._execute('SELECT * FROM {}'.format(self._tablename())))
-        for field in self._columns():
+        for field in self._field_definitions():
             # print('F', field)
             value = getattr(self, field[0])
             if isinstance(value, BaseModel):

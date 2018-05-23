@@ -39,7 +39,7 @@ class TestBaseModel(TestCase):
 
     def test_fields(self):
         m = TestSupModel()
-        self.assertEqual(m._columns(), [('id', 'int'), ('int1', 'int'), ('str1', 'text')])
+        self.assertEqual(m._field_definitions(), [('id', 'int'), ('int1', 'int'), ('str1', 'text')])
 
     def test_save(self):
         # scheme = Scheme()
@@ -90,3 +90,12 @@ class TestBaseModel(TestCase):
         m22 = TestSubModel(id=7)
         print('M22', m22, m22.sup)
         # m22.save(verbose=True)
+
+    def test_query(self):
+        TestSupModel.migrate()
+        m11 = TestSupModel(data={'id': 3, 'int1': 45, 'str1': 'example'})
+        m11.save()
+        qs = m11.query(TestSupModel.int1, TestSupModel.str1)
+        self.assertEqual(qs.names, ['int1', 'str1'])
+        self.assertEqual(qs._sql, 'SELECT int1, str1 FROM testsupmodel')
+        self.assertEqual(qs.all(), [(45, 'example')])
