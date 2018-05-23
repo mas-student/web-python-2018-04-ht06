@@ -34,7 +34,7 @@ class TestBaseModel(TestCase):
         # m._execute.assert_called()
         # m._execute.assert_called_with('CREATE TABLE testmodel(id int, int1 int, str1 text)')
 
-        executeMock.assert_called()
+        executeMock.called
         executeMock.assert_called_with('CREATE TABLE testsupmodel(id int, int1 int, str1 text)')
 
     def test_fields(self):
