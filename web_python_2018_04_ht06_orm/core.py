@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from copy import deepcopy
 import sqlite3
 
 
@@ -23,20 +24,38 @@ class FieldDefinition:
 
 class QuerySet:
 
-    def __init__(self, tablename, definitions):
+    def __init__(self, tablename, definitions, filters=None):
         self._tablename = tablename
         self._fieldnames = []
-        for definition in definitions:
+        self._definitions = definitions
+        self._filters = filters if filters is not None else {}
+        # for definition in definitions:
+        #     if type(definition) == tuple:
+        #         self._fieldnames.append(definition[0])
+
+    def _get_fieldnames(self):
+        # return self._fieldnames
+        # return self._fieldnames
+        result = []
+        for definition in self._definitions:
             if type(definition) == tuple:
-                self._fieldnames.append(definition[0])
+                result.append(definition[0])
+        return result
 
     @property
     def names(self):
-        return self._fieldnames
+        return self._get_fieldnames()
 
     @property
     def _sql(self):
-        return 'SELECT {} FROM {}'.format(', '.join(self._fieldnames), self._tablename)
+        where = ''
+        if len(self._filters) > 0:
+            where = 'WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self._filters.items()]))
+
+        return 'SELECT {select} FROM {from_} {where}'.format(
+            select=', '.join(self._get_fieldnames()),
+            from_=self._tablename,
+            where=where).strip()
 
     @classmethod
     def _execute(cls, query):
@@ -45,6 +64,14 @@ class QuerySet:
         c.execute(query)
         conn.commit()
         return c.fetchall()
+
+    def filter(self, **filters):
+        _filters = deepcopy(self._filters)
+        _filters.update(filters)
+        return QuerySet(
+            tablename=self._tablename,
+            definitions=self._definitions,
+            filters=_filters)
 
     def all(self):
         return self._execute(self._sql)
@@ -149,10 +176,12 @@ class BaseModel:
 
     @classmethod
     def _field_definitions(cls):
-        return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        # return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        return [(name, getattr(cls, name)[1]) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
 
-    def query(self, *definitions):
-        return QuerySet(self._tablename(), definitions)
+    @classmethod
+    def query(cls, *definitions):
+        return QuerySet(cls._tablename(), definitions)
 
     def save(self, verbose=True):
         fields = OrderedDict()
@@ -183,6 +212,7 @@ class BaseModel:
             print('SAVE', '"'+query+'"')
         self._execute(query)
         # print('ALL 2', self._execute('SELECT * FROM {}'.format(self._tablename())))
+        return self
 
     @classmethod
     def all(cls):
@@ -207,9 +237,9 @@ class BaseModel:
         cls._create_table(cls._tablename())
 
 
-class FirstModel(BaseModel):
-
-    pass
+# class FirstModel(BaseModel):
+#
+#     pass
 
 def connect():
     conn = sqlite3.connect('local.db')
@@ -250,10 +280,10 @@ def table(conn):
     return record
 
 def main():
-    # table(connect())
-    m = FirstModel()
-    m.migrate()
-
+    pass
+    # # table(connect())
+    # m = FirstModel()
+    # m.migrate()
 
 
 if __name__ == '__main__':
