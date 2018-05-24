@@ -36,6 +36,8 @@ class QuerySet:
         for definition in self._definitions:
             if type(definition) == tuple:
                 result.append(definition[0])
+                if len(definition) >= 3:
+                    print('TABLENAME', definition[2])
         return result
 
     @property
@@ -84,18 +86,31 @@ class QuerySet:
 
 class BaseField(object):
 
-    def __init__(self, initval=None, name=None, type=str):
+    def __init__(self, initval=None, name=None, type=str, tablename=None):
         self.__value = initval
         self.__name = name
         self.__type = type
+        self.__tablename = tablename
 
     def __get__(self, obj, type=None):
-        print('GET', self, self.__hash__(), obj, type)
-        print('NAME', type.get_name(self))
+        # print('GET', self, self.__hash__(), obj, type)
+        # print('NAME', type.get_name(self))
         name = self.__name
         if name is None:
             name = type.get_name(self)
         return (name, self.__type, type._get_tablename(), self.__value)
+
+    # def __set__(self, obj, val):
+    #     print('Updating', self.name)
+    #     self.val = val
+
+    @property
+    def name(self):
+        return self.__name
+
+    @property
+    def tablename(self):
+        return self.__name
 
     pass
 
@@ -118,7 +133,20 @@ class BaseModel:
         }
         # return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
         # return [(name, getattr(cls, name)[1]) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
-        return [(name, typeMap.get(getattr(cls, name)[1].__name__, getattr(cls, name)[1])) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+
+        defs = []
+        for name in sorted(cls.__dict__.keys()):
+            if not name.startswith('__'):
+                attr = getattr(cls, name)
+                # print('ATTR', attr)
+                if isinstance(attr, BaseField):
+                    # print('BaseField', attr)
+                    defs.append((attr.name, typeMap.get(attr.type.__name__, attr.type)))
+                else:
+                    defs.append((name, typeMap.get(attr[1].__name__, attr[1])))
+        return defs
+
+        # return [(name, typeMap.get(getattr(cls, name)[1].__name__, getattr(cls, name)[1])) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
 
 
     def __init__(self, scheme=None, id=0, record=None, data=None):

@@ -3,14 +3,20 @@ from web_python_2018_04_ht06_orm.core import connect, table, Scheme, BaseModel, 
 
 
 class TestParentModel(BaseModel):
-    id = ('id', int)
-    int1 = ('int1', int)
-    str1 = ('str1', str)
+    # id = ('id', int)
+    id = BaseField(type=int)
+    # int1 = ('int1', int)
+    int1 = BaseField(type=int)
+    # str1 = ('str1', str)
+    str1 = BaseField(type=str)
 
 class TestChildModel(BaseModel):
-    id = ('id', int)
-    sup = ('sup', TestParentModel)
-    str2 = ('str2', str)
+    # id = ('id', int)
+    # sup = ('sup', TestParentModel)
+    # str2 = ('str2', str)
+    id = BaseField(type=int)
+    sup = BaseField(type=TestParentModel)
+    str2 = BaseField(type=str)
 
 class TestFieldModel(BaseModel):
     simple = BaseField()
