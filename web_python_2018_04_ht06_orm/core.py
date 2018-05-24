@@ -18,14 +18,10 @@ class Scheme:
             model.migrate()
 
 
-class FieldDefinition:
-    pass
-
-
 class QuerySet:
 
-    def __init__(self, tablename, definitions, filters=None):
-        self._tablename = tablename
+    def __init__(self, tablenames, definitions, filters=None):
+        self._tablenames = tablenames
         self._fieldnames = []
         self._definitions = definitions
         self._filters = filters if filters is not None else {}
@@ -46,16 +42,19 @@ class QuerySet:
     def names(self):
         return self._get_fieldnames()
 
-    @property
-    def _sql(self):
+    def _get_sql(self):
         where = ''
         if len(self._filters) > 0:
             where = 'WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self._filters.items()]))
 
         return 'SELECT {select} FROM {from_} {where}'.format(
             select=', '.join(self._get_fieldnames()),
-            from_=self._tablename,
+            from_=', '.join(self._tablenames),
             where=where).strip()
+
+    @property
+    def sql(self):
+        return self._get_sql()
 
     @classmethod
     def _execute(cls, query):
@@ -69,15 +68,58 @@ class QuerySet:
         _filters = deepcopy(self._filters)
         _filters.update(filters)
         return QuerySet(
-            tablename=self._tablename,
+            tablenames=self._tablenames,
             definitions=self._definitions,
             filters=_filters)
 
+    def join(self, tablename):
+        return QuerySet(
+            tablenames=self._tablenames+[tablename],
+            definitions=self._definitions,
+            filters=self._filters)
+
     def all(self):
-        return self._execute(self._sql)
+        return self._execute(self._get_sql())
+
+
+class BaseField(object):
+
+    def __init__(self, initval=None, name=None, type=str):
+        self.__value = initval
+        self.__name = name
+        self.__type = type
+
+    def __get__(self, obj, type=None):
+        print('GET', self, self.__hash__(), obj, type)
+        print('NAME', type.get_name(self))
+        name = self.__name
+        if name is None:
+            name = type.get_name(self)
+        return (name, self.__type, type._get_tablename(), self.__value)
+
+    pass
 
 
 class BaseModel:
+
+    @classmethod
+    def get_name(cls, des):
+        for name, field in cls.__dict__.items():
+            if field is des:
+                return name
+        return
+
+
+    @classmethod
+    def _field_definitions(cls):
+        typeMap = {
+            'int': 'int',
+            'str': 'text'
+        }
+        # return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        # return [(name, getattr(cls, name)[1]) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        return [(name, typeMap.get(getattr(cls, name)[1].__name__, getattr(cls, name)[1])) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+
 
     def __init__(self, scheme=None, id=0, record=None, data=None):
         self.id = id
@@ -104,9 +146,9 @@ class BaseModel:
         # record = [data[key] for key in keys]
         # self._load_from_record(record)
 
-        columnMap = dict(self._field_definitions())
+        fieldDefinitions = dict(self._field_definitions())
         for key, value in data.items():
-            typedef = columnMap[key]
+            typedef = fieldDefinitions[key]
             if type(typedef) == type:
                 value = typedef.first(value)
             setattr(self, key, value)
@@ -156,7 +198,7 @@ class BaseModel:
                 ', '.join(' '.join(v) for v in columns))
             # c.execute(query)
             cls._execute(query)
-            print('CREATE', query)
+            # print('CREATE', query)
         except Exception as e:
             print(e)
 
@@ -175,20 +217,13 @@ class BaseModel:
             print(e)
 
     @classmethod
-    def _field_definitions(cls):
-        typeMap = {
-            'int': 'int',
-            'str': 'text'
-        }
-        # return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
-        # return [(name, getattr(cls, name)[1]) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
-        return [(name, typeMap.get(getattr(cls, name)[1].__name__, getattr(cls, name)[1])) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
-
-    @classmethod
     def query(cls, *definitions):
-        return QuerySet(cls._tablename(), definitions)
+        return QuerySet(
+            tablenames=[cls._get_tablename()],
+            definitions=definitions
+        )
 
-    def save(self, verbose=True):
+    def save(self, verbose=False):
         fields = OrderedDict()
         # print('ALL 1', self._execute('SELECT * FROM {}'.format(self._tablename())))
         for field in self._field_definitions():
@@ -200,14 +235,14 @@ class BaseModel:
 
         if self.first(self.id):
             query = 'UPDATE {} SET {} WHERE id = {}'.format(
-                self._tablename(),
+                self._get_tablename(),
                 ', '.join(['{} = "{}"'.format(k, v) for k, v in fields.items() if k != 'id']),
                 # self._tablename(),
                 self.id
             )
         else:
             query = 'INSERT INTO {} ({}) VALUES ({})'.format(
-                self._tablename(),
+                self._get_tablename(),
                 ', '.join(['{}'.format(k) for k in fields.keys()]),
                 ', '.join(['"{}"'.format(v) for v in fields.values()]),
                 # self._tablename(),
@@ -221,16 +256,16 @@ class BaseModel:
 
     @classmethod
     def all(cls):
-        return cls._execute('SELECT * FROM {}'.format(cls._tablename()))
+        return cls._execute('SELECT * FROM {}'.format(cls._get_tablename()))
 
     @classmethod
     def first(cls, id):
-        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._tablename(), id))
+        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), id))
         if records:
             return records[0]
 
     @classmethod
-    def _tablename(cls):
+    def _get_tablename(cls):
         return cls.__name__.lower()
 
     @classmethod
@@ -238,8 +273,8 @@ class BaseModel:
         # tablename = self.__class__.__name__.lower()
         # self.__create_table(tablename)
         # cls.__create_table(cls._tablename())
-        cls._drop_table(cls._tablename())
-        cls._create_table(cls._tablename())
+        cls._drop_table(cls._get_tablename())
+        cls._create_table(cls._get_tablename())
 
 
 # class FirstModel(BaseModel):
