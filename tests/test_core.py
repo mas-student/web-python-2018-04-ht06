@@ -3,12 +3,12 @@ from web_python_2018_04_ht06_orm.core import connect, table, Scheme, BaseModel
 
 
 class TestSupModel(BaseModel):
-    id = ('id', 'int')
-    int1 = ('int1', 'int')
-    str1 = ('str1', 'text')
+    id = ('id', int)
+    int1 = ('int1', int)
+    str1 = ('str1', str)
 
 class TestSubModel(BaseModel):
-    id = ('id', 'int')
+    id = ('id', int)
     sup = ('sup', TestSupModel)
 
 

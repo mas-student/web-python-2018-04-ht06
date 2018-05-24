@@ -176,8 +176,13 @@ class BaseModel:
 
     @classmethod
     def _field_definitions(cls):
+        typeMap = {
+            'int': 'int',
+            'str': 'text'
+        }
         # return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
-        return [(name, getattr(cls, name)[1]) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        # return [(name, getattr(cls, name)[1]) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        return [(name, typeMap.get(getattr(cls, name)[1].__name__, getattr(cls, name)[1])) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
 
     @classmethod
     def query(cls, *definitions):
