@@ -20,10 +20,19 @@ class Scheme:
 
 class QuerySet:
 
-    def __init__(self, tablenames, definitions, filters=None):
+    def __init__(self, tablenames, definitions, filters=None, models=None, fields=None):
+        self.__models = models if models else []
+        self.__fields = fields if fields else []
+        print('FIELDS', self.__fields)
         self._tablenames = tablenames
         self._fieldnames = []
         self._definitions = definitions
+        ts = []
+        for definition in self._definitions:
+            if type(definition) == tuple:
+                if len(definition) >= 3:
+                    ts.append(definition[2])
+        print('TS', ts)
         self._filters = filters if filters is not None else {}
         # for definition in definitions:
         #     if type(definition) == tuple:
@@ -45,6 +54,14 @@ class QuerySet:
         return self._get_fieldnames()
 
     def _get_sql(self):
+        ons = []
+        for model in self.__models:
+            for field in model._get_fields():
+                print('MODEL', model, 'FIELD', field)
+        # for definition in self._definitions:
+        #     if definition[3] and definition[3] in self._tablenames[1:]:
+        #         print('ON {}.{} = {}.id'.format(self._tablenames[0], definition[0], definition[3]))
+
         where = ''
         if len(self._filters) > 0:
             where = 'WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self._filters.items()]))
@@ -74,9 +91,10 @@ class QuerySet:
             definitions=self._definitions,
             filters=_filters)
 
-    def join(self, tablename):
+    def join(self, model):
+        print('JOIN DEFS', self._definitions)
         return QuerySet(
-            tablenames=self._tablenames+[tablename],
+            tablenames=self._tablenames+[model._get_tablename()],
             definitions=self._definitions,
             filters=self._filters)
 
@@ -91,18 +109,35 @@ class BaseField(object):
         self.__name = name
         self.__type = type
         self.__tablename = tablename
+        self.__foreign = None
+        if issubclass(self.__type, BaseModel):
+            self.__foreign = self.__type
 
-    def __get__(self, obj, type=None):
+    def __get__(self, obj, atype=None):
         # print('GET', self, self.__hash__(), obj, type)
         # print('NAME', type.get_name(self))
         name = self.__name
         if name is None:
-            name = type.get_name(self)
-        return (name, self.__type, type._get_tablename(), self.__value)
+            name = atype.get_name(self)
+        foreign = None
+        if issubclass(self.__type, BaseModel):
+        # if isinstance(1self.__type, BaseModel):
+        # if type(self.__type).__name__ == 'type':
+            foreign = self.__type._get_tablename()
+            print('foreign', foreign)
+        return (name, self.__type, atype._get_tablename(), foreign, self.__value)
 
     # def __set__(self, obj, val):
     #     print('Updating', self.name)
     #     self.val = val
+
+    @property
+    def type(self):
+        return self.__type
+
+    @property
+    def foreign(self):
+        return self.__foreign
 
     @property
     def name(self):
@@ -110,7 +145,7 @@ class BaseField(object):
 
     @property
     def tablename(self):
-        return self.__name
+        return self.__tablename
 
     pass
 
@@ -124,6 +159,35 @@ class BaseModel:
                 return name
         return
 
+    @classmethod
+    def _get_class_attrs(cls):
+        attrs = []
+        for name in sorted(cls.__dict__.keys()):
+            if not name.startswith('__'):
+                attrs.append((name, cls.__dict__[name]))
+                # attrs.append((name, getattr(cls, name)))
+                # print('ATTR', attr)
+        return attrs
+
+    @classmethod
+    def _get_field_dict(cls):
+        # return cls._get_class_attrs()
+        field_dict = OrderedDict()
+        for name, attr in cls._get_class_attrs():
+            field_dict[name] = attr
+        return field_dict
+
+    @classmethod
+    def _get_fields(cls):
+        # return cls._get_class_attrs()
+        fields = []
+        for name, attr in cls._get_class_attrs():
+            fields.append(attr)
+        return fields
+
+    @property
+    def fields(self):
+        return self._get_fields()
 
     @classmethod
     def _field_definitions(cls):
@@ -135,15 +199,21 @@ class BaseModel:
         # return [(name, getattr(cls, name)[1]) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
 
         defs = []
-        for name in sorted(cls.__dict__.keys()):
-            if not name.startswith('__'):
-                attr = getattr(cls, name)
-                # print('ATTR', attr)
-                if isinstance(attr, BaseField):
-                    # print('BaseField', attr)
-                    defs.append((attr.name, typeMap.get(attr.type.__name__, attr.type)))
-                else:
-                    defs.append((name, typeMap.get(attr[1].__name__, attr[1])))
+        # for name in sorted(cls.__dict__.keys()):
+        #     if not name.startswith('__'):
+        #         attr = getattr(cls, name)
+        #         # print('ATTR', attr)
+        #         if isinstance(attr, BaseField):
+        #             # print('BaseField', attr)
+        #             defs.append((attr.name, typeMap.get(attr.type.__name__, attr.type)))
+        #         else:
+        #             defs.append((name, typeMap.get(attr[1].__name__, attr[1])))
+        for name, attr in cls._get_class_attrs():
+            if isinstance(attr, BaseField):
+                # print('BaseField', attr, attr.type, attr.type.__name__)
+                defs.append((name, typeMap.get(attr.type.__name__, attr.type)))
+            else:
+                defs.append((name, typeMap.get(attr[1].__name__, attr[1])))
         return defs
 
         # return [(name, typeMap.get(getattr(cls, name)[1].__name__, getattr(cls, name)[1])) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
@@ -246,9 +316,13 @@ class BaseModel:
 
     @classmethod
     def query(cls, *definitions):
+        field_dict = cls._get_field_dict()
+        print('FIELD_DICT', field_dict)
         return QuerySet(
             tablenames=[cls._get_tablename()],
-            definitions=definitions
+            definitions=definitions,
+            models=[cls],
+            fields=[field_dict.get(definition[0]) for definition in definitions]
         )
 
     def save(self, verbose=False):

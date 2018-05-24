@@ -23,6 +23,7 @@ class TestFieldModel(BaseModel):
     named = BaseField(name='title')
     inited = BaseField(initval='begin')
     number = BaseField(type=int)
+    parent = BaseField(type=TestParentModel)
 
 
 class TestCore(TestCase):
@@ -135,7 +136,7 @@ class TestBaseModel(TestCase):
         TestChildModel.migrate()
         TestChildModel(data={'id': 1, 'sup': p2, 'str2': 'text1'}).save()
         TestChildModel(data={'id': 4, 'sup': p1, 'str2': 'text2'}).save()
-        qs = TestParentModel.query(TestParentModel.str1, TestChildModel.str2).join(TestChildModel._get_tablename())
+        qs = TestParentModel.query(TestParentModel.str1, TestChildModel.str2).join(TestChildModel)
         self.assertEqual(qs.sql, 'SELECT str1, str2 FROM testparentmodel, testchildmodel')
         self.assertEqual(qs.filter(int1=45).sql, 'SELECT str1, str2 FROM testparentmodel, testchildmodel WHERE int1 == "45"')
         self.assertEqual(qs.filter(int1=45).all(), [('sample', 'text1'), ('sample', 'text2')])
@@ -150,8 +151,9 @@ class TestBaseModel(TestCase):
         m = TestFieldModel()
         # print('FIELD', m.color)
         # print('FIELD', m.color)
-        self.assertEqual(TestFieldModel.simple, ('simple', str, 'testfieldmodel', None))
-        self.assertEqual(m.simple, ('simple', str, 'testfieldmodel', None))
-        self.assertEqual(m.named, ('title', str, 'testfieldmodel', None))
-        self.assertEqual(m.named, ('title', str, 'testfieldmodel', None))
-        self.assertEqual(m.number, ('number', int, 'testfieldmodel', None))
+        self.assertEqual(TestFieldModel.simple, ('simple', str, 'testfieldmodel', None, None))
+        self.assertEqual(m.simple, ('simple', str, 'testfieldmodel', None, None))
+        self.assertEqual(m.named, ('title', str, 'testfieldmodel', None, None))
+        self.assertEqual(m.named, ('title', str, 'testfieldmodel', None, None))
+        self.assertEqual(m.number, ('number', int, 'testfieldmodel', None, None))
+        self.assertEqual(m.parent, ('parent', TestParentModel, 'testfieldmodel', 'testparentmodel', None))
