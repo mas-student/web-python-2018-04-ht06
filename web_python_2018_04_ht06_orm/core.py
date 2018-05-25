@@ -31,10 +31,10 @@ class QuerySet:
     def __init__(self, tablenames, definitions, filters=None, models=None, fields=None, parent=None):
         self.__parent = parent
         self.__models = self._pack_models(models if models else [])
-        print('MODELS', self.__models)
+        # print('MODELS', self.__models)
         # self.__fields = fields if fields else []
         self.__fields = [definition[2]._get_field(definition[0]) for definition in definitions]
-        print('FIELDS', self.__fields)
+        # print('FIELDS', self.__fields)
         # self._tablenames = tablenames
         self._tablenames = [model._get_tablename() for model in self.__models]
         self._fieldnames = []
@@ -57,8 +57,8 @@ class QuerySet:
         for definition in self._definitions:
             if type(definition) == tuple:
                 result.append(definition[0])
-                if len(definition) >= 3:
-                    print('TABLENAME', definition[2])
+                # if len(definition) >= 3:
+                #     print('TABLENAME', definition[2])
         return result
 
     @property
@@ -76,10 +76,10 @@ class QuerySet:
         #         print('ON {}.{} = {}.id'.format(self._tablenames[0], definition[0], definition[3]))
         for model in self.__models:
             for definition in model._get_field_definitions():
-                print('!!!', definition, self.__parent, definition[2] is self.__parent)
+                # print('!!!', definition, self.__parent, definition[2] is self.__parent)
                 if definition[3] and definition[2] is self.__parent:
                     on = ' ON {}.{} = {}.id'.format(definition[2]._get_tablename(), definition[0], definition[3]._get_tablename())
-                    print(on)
+                    # print('ON', on)
 
         where = ''
         if len(self._filters) > 0:
@@ -103,26 +103,43 @@ class QuerySet:
         conn.commit()
         return c.fetchall()
 
-    def filter(self, **filters):
-        _filters = deepcopy(self._filters)
-        _filters.update(filters)
-        return QuerySet(
+    @classmethod
+    def fromQuerySet(cls):
+        pass
+
+    def _get_modified_copy(self, **kwargs):
+        data = dict(
             tablenames=self._tablenames,
             definitions=self._definitions,
-            filters=_filters,
+            filters=self._filters,
             models=self.__models,
             parent=self.__parent,
         )
+        data.update(kwargs)
+        return QuerySet(**data)
+
+    def filter(self, **filters):
+        return self._get_modified_copy(filters = filters)
+        # _filters = deepcopy(self._filters)
+        # _filters.update(filters)
+        # return QuerySet(
+        #     tablenames=self._tablenames,
+        #     definitions=self._definitions,
+        #     filters=_filters,
+        #     models=self.__models,
+        #     parent=self.__parent,
+        # )
 
     def join(self, model):
-        print('JOIN DEFS', self._definitions, 'models', self.__models),
-        return QuerySet(
-            tablenames=self._tablenames+[model._get_tablename()],
-            definitions=self._definitions,
-            filters=self._filters,
-            models=self._pack_models(self.__models+[model]),
-            parent=self.__parent,
-        )
+        return self._get_modified_copy(models=self._pack_models(self.__models+[model]))
+        # # print('JOIN DEFS', self._definitions, 'models', self.__models),
+        # return QuerySet(
+        #     tablenames=self._tablenames+[model._get_tablename()],
+        #     definitions=self._definitions,
+        #     filters=self._filters,
+        #     models=self._pack_models(self.__models+[model]),
+        #     parent=self.__parent,
+        # )
 
     def all(self):
         return self._execute(self._get_sql())
@@ -150,7 +167,7 @@ class BaseField(object):
         # if isinstance(1self.__type, BaseModel):
         # if type(self.__type).__name__ == 'type':
             foreign = self.__type
-            print('foreign', foreign)
+            # print('foreign', foreign)
         return (name, self.__type, atype, foreign, self.__value)
 
     # def __set__(self, obj, val):
@@ -360,7 +377,7 @@ class BaseModel:
     @classmethod
     def query(cls, *definitions):
         field_dict = cls._get_field_dict()
-        print('FIELD_DICT', field_dict)
+        # print('FIELD_DICT', field_dict)
         return QuerySet(
             tablenames=[cls._get_tablename()],
             definitions=definitions,
