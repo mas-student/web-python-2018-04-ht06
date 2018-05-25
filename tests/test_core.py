@@ -1,3 +1,4 @@
+from sqlite3 import OperationalError
 from unittest import TestCase, mock
 from web_python_2018_04_ht06_orm.core import connect, table, Scheme, BaseModel, BaseField
 
@@ -41,19 +42,27 @@ class TestBaseModel(TestCase):
     # @mock.patch('__main__.TestModel._execute')
     @mock.patch('web_python_2018_04_ht06_orm.core.BaseModel._execute')
     def test_migrate(self, executeMock):
-        m = StubParentModel()
-        # m._execute = mock.Mock()
-        m.migrate()
+        # m = StubParentModel()
+        # # m._execute = mock.Mock()
+        # m.migrate()
+
+        StubParentModel._drop_table()
+        StubParentModel.migrate()
 
         # m._execute.assert_called()
         # m._execute.assert_called_with('CREATE TABLE testmodel(id int, int1 int, str1 text)')
 
         self.assertTrue(executeMock.called)
-        executeMock.assert_called_with('CREATE TABLE stubparentmodel(id int, int1 int, str1 text)')
+        executeMock.assert_called_with('CREATE TABLE stubparentmodel(id int, int1 int, str1 text)', existed=False)
 
     def test_model(self):
         m = StubParentModel()
         self.assertEquals(m._values, {})
+
+        StubParentModel._drop_table()
+        m = StubParentModel(data={'id': 3, 'int1': 45, 'str1': 'example'})
+        # m.save()
+        self.assertRaises(LookupError, lambda : m.save())
 
     def test_fields(self):
         m = StubParentModel()

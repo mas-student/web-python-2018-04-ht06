@@ -349,29 +349,42 @@ class BaseModel:
         # record = [data[key] for key in keys]
         # self._load_from_record(record)
 
-        fieldDefinitions = dict(self._get_column_defintions())
+        column_defintions = dict(self._get_column_defintions())
         for key, value in data.items():
-            typedef = fieldDefinitions[key]
+            typedef = column_defintions[key]
             if type(typedef) == type:
                 value = typedef.first(value)
             setattr(self, key, value)
 
     def _load_from_record(self, record):
-        for (name, typedef), value in zip([c for c in self._get_column_defintions()], record):
-            if type(typedef) == type:
-                value = typedef.first(value)
+        for (name, column_defintion), value in zip([c for c in self._get_column_defintions()], record):
+            if type(column_defintion) == type:
+                value = column_defintion.first(value)
             setattr(self, name, value)
 
     @classmethod
-    def _execute(cls, query):
+    def _execute(cls, query, existed=True):
+        # raise LookupError('Table {} does not exist'.format(cls._get_tablename()))
         conn = connect()
         c = conn.cursor()
+
+        c.execute('SELECT name FROM sqlite_master')
+        # print('TABLES', c.fetchall())
+
+        if existed:
+            sql = 'SELECT name FROM sqlite_master WHERE type=\'table\' AND name=\'{table_name}\''.format(
+                table_name=cls._get_tablename())
+            # print('SQL', sql)
+            c.execute(sql)
+            if len(list(c.fetchall())) == 0:
+                raise LookupError('Table {} does not exist'.format(cls._get_tablename()))
+
         c.execute(query)
         conn.commit()
         return c.fetchall()
 
     @classmethod
-    def _create_table(cls, tablename):
+    def _create_table(cls):
         # print('TN', tablename)
 
         # conn = connect()
@@ -397,10 +410,10 @@ class BaseModel:
                     columns[i] = columns[i][0], 'int'
             # print('COLUMNS', columns)
             query = 'CREATE TABLE {}({})'.format(
-                tablename,
+                cls._get_tablename(),
                 ', '.join(' '.join(v) for v in columns))
             # c.execute(query)
-            cls._execute(query)
+            cls._execute(query, existed=False)
             # print('CREATE', query)
         except Exception as e:
             print(e)
@@ -409,11 +422,11 @@ class BaseModel:
         # conn.commit()
 
     @classmethod
-    def _drop_table(cls, tablename):
+    def _drop_table(cls):
         try:
             # c.execute('DROP TABLE ?', (tablename, ))
             # c.execute('DROP TABLE {}'.format(tablename))
-            query = 'DROP TABLE {}'.format(tablename)
+            query = 'DROP TABLE {}'.format(cls._get_tablename())
             cls._execute(query)
             # print('DROP', tablename)
         except Exception as e:
@@ -495,8 +508,8 @@ class BaseModel:
         # tablename = self.__class__.__name__.lower()
         # self.__create_table(tablename)
         # cls.__create_table(cls._tablename())
-        cls._drop_table(cls._get_tablename())
-        cls._create_table(cls._get_tablename())
+        cls._drop_table()
+        cls._create_table()
 
 
 # class FirstModel(BaseModel):
