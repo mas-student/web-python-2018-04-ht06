@@ -7,6 +7,37 @@ import sqlite3
 def escape():
     pass
 
+# def _execute(query, tablename, existed=True):
+#     # raise LookupError('Table {} does not exist'.format(cls._get_tablename()))
+#     conn = connect()
+#     c = conn.cursor()
+#
+#     c.execute('SELECT name FROM sqlite_master')
+#     # print('TABLES', c.fetchall())
+#
+#     if existed:
+#         sql = 'SELECT name FROM sqlite_master WHERE type=\'table\' AND name=\'{table_name}\''.format(
+#             table_name=tablename)
+#         # print('SQL', sql)
+#         c.execute(sql)
+#         if len(list(c.fetchall())) == 0:
+#             raise LookupError('Table {} does not exist'.format(tablename))
+#
+#     c.execute(query)
+#     conn.commit()
+#     return c.fetchall()
+
+
+# def _update(tablename, pk, **fields):
+#     if self.first(self.id):
+#         query = 'UPDATE {} SET {} WHERE id = "{}"'.format(
+#             self._get_tablename(),
+#             ', '.join(['{} = "{}"'.format(k, v) for k, v in values.items() if k != 'id']),
+#             # self._tablename(),
+#             self.id
+#         )
+
+
 class Scheme:
     def __init__(self):
         self.__models = OrderedDict()
@@ -364,6 +395,9 @@ class BaseModel:
 
     @classmethod
     def _execute(cls, query, existed=True):
+        # print('EXECUTE', query)
+        # return _execute(query, existed)
+
         # raise LookupError('Table {} does not exist'.format(cls._get_tablename()))
         conn = connect()
         c = conn.cursor()
@@ -433,6 +467,103 @@ class BaseModel:
             print(e)
 
     @classmethod
+    def _first(cls, pk):
+        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), pk))
+        if records:
+            return records[0]
+
+    @classmethod
+    def _insert(cls, **values):
+        query = 'INSERT INTO {} ({}) VALUES ({})'.format(
+            cls._get_tablename(),
+            ', '.join(['{}'.format(k) for k in values.keys()]),
+            ', '.join(['"{}"'.format(v) for v in values.values()]),
+            # self._tablename(),
+            # self.id
+        )
+        # query = 'UPDATE {} SET {} WHERE id = "{}"'.format(
+        #     cls._get_tablename(),
+        #     ', '.join(['{} = "{}"'.format(k, v) for k, v in values.items() if k != 'id']),
+        #     # self._tablename(),
+        #     pk
+        # )
+        return cls._execute(query)
+
+    @classmethod
+    def _update(cls, pk, **values):
+        # print('_UPDATE', pk, values)
+        query = 'UPDATE {} SET {} WHERE id = "{}"'.format(
+            cls._get_tablename(),
+            # ', '.join(['{} = "{}"'.format(k, v) for k, v in values.items() if k != 'id']),
+            ', '.join(['{} = "{}"'.format(k, v) for k, v in values.items()]),
+            # self._tablename(),
+            pk
+        )
+        return cls._execute(query)
+
+    def save(self, verbose=False):
+        values = OrderedDict()
+        # print('ALL 1', self._execute('SELECT * FROM {}'.format(self._tablename())))
+        # for column_defintions in self._get_column_defintions():
+        #     # print('F', field)
+        #     value = getattr(self, column_defintions[0])
+        #     if isinstance(value, BaseModel):
+        #         value = value.id
+        #     values[column_defintions[0]] = value
+        for key, value in self._values.items():
+            # print('KEY', key, 'VALUE', value)
+            if isinstance(value, BaseModel):
+                value = value.id
+            values[key] = value
+
+        if self.first(self.id):
+        # if self.first(self.id):
+        #     if 'id' in values:
+        #         del values['id']
+            type(self)._update(self.id, **values)
+            # query = 'UPDATE {} SET {} WHERE id = "{}"'.format(
+            #     self._get_tablename(),
+            #     ', '.join(['{} = "{}"'.format(k, v) for k, v in values.items() if k != 'id']),
+            #     # self._tablename(),
+            #     self.id
+            # )
+        else:
+            type(self)._insert(**values)
+            # query = 'INSERT INTO {} ({}) VALUES ({})'.format(
+            #     self._get_tablename(),
+            #     ', '.join(['{}'.format(k) for k in values.keys()]),
+            #     ', '.join(['"{}"'.format(v) for v in values.values()]),
+            #     # self._tablename(),
+            #     # self.id
+            # )
+            # self._execute(query)
+        # if verbose:
+        #     print('SAVE', '"'+query+'"')
+        # self._execute(query)
+        # print('ALL 2', self._execute('SELECT * FROM {}'.format(self._tablename())))
+        return self
+
+    @classmethod
+    def all(cls):
+        return cls._execute('SELECT * FROM {}'.format(cls._get_tablename()))
+
+    @classmethod
+    def first(cls, id):
+        return cls._first(id)
+        # records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), id))
+        # if records:
+        #     return records[0]
+
+    @classmethod
+    def get(cls, id):
+        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), id))
+
+        if len(records) == 0:
+            raise Exception('{} has not record with id = {}'.format(cls.__name__, id))
+
+        return cls(record=records[0])
+
+    @classmethod
     def query(cls, *fields):
         definitions = [field.definition for field in fields]
         models = [field.model for field in fields]
@@ -446,62 +577,13 @@ class BaseModel:
             parent=cls
         )
 
-    def save(self, verbose=False):
-        values = OrderedDict()
-        # print('ALL 1', self._execute('SELECT * FROM {}'.format(self._tablename())))
-        # for column_defintions in self._get_column_defintions():
-        #     # print('F', field)
-        #     value = getattr(self, column_defintions[0])
-        #     if isinstance(value, BaseModel):
-        #         value = value.id
-        #     values[column_defintions[0]] = value
-        for key, value in self._values.items():
-            # print('KEY', key, 'VALUE', value)
-            values[key] = value
-
-        if self.first(self.id):
-            query = 'UPDATE {} SET {} WHERE id = {}'.format(
-                self._get_tablename(),
-                ', '.join(['{} = "{}"'.format(k, v) for k, v in values.items() if k != 'id']),
-                # self._tablename(),
-                self.id
-            )
-        else:
-            query = 'INSERT INTO {} ({}) VALUES ({})'.format(
-                self._get_tablename(),
-                ', '.join(['{}'.format(k) for k in values.keys()]),
-                ', '.join(['"{}"'.format(v) for v in values.values()]),
-                # self._tablename(),
-                # self.id
-            )
-        if verbose:
-            print('SAVE', '"'+query+'"')
-        self._execute(query)
-        # print('ALL 2', self._execute('SELECT * FROM {}'.format(self._tablename())))
-        return self
-
-    @classmethod
-    def all(cls):
-        return cls._execute('SELECT * FROM {}'.format(cls._get_tablename()))
-
-    @classmethod
-    def first(cls, id):
-        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), id))
-        if records:
-            return records[0]
-
-    @classmethod
-    def get(cls, id):
-        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), id))
-
-        if len(records) == 0:
-            raise Exception('{} has not record with id = {}'.format(cls.__name__, id))
-
-        return cls(record=records[0])
-
     @classmethod
     def _get_tablename(cls):
         return cls.__name__.lower()
+
+    @property
+    def tablename(self):
+        return type(self)._get_tablename()
 
     @classmethod
     def migrate(cls):

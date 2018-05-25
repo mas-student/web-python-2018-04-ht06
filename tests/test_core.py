@@ -1,5 +1,7 @@
 from sqlite3 import OperationalError
 from unittest import TestCase, mock
+from unittest.mock import patch
+
 from web_python_2018_04_ht06_orm.core import connect, table, Scheme, BaseModel, BaseField
 
 
@@ -84,6 +86,7 @@ class TestBaseModel(TestCase):
 
         m2 = StubParentModel.get(id=3)
         m2.int1 = 17
+        self.assertEqual(m2._values, {'id': 3, 'int1': 17, 'str1': 'example'})
         m2.save()
         self.assertEqual(m2.all(), [(3, 17, 'example')])
 
@@ -113,7 +116,10 @@ class TestBaseModel(TestCase):
         m21.migrate()
         m21.id = 7
         m21.sup = m11
-        m21.save()
+        with patch('web_python_2018_04_ht06_orm.core.BaseModel._insert') as mockInsert:
+            m21.save()
+            mockInsert.assert_called_with(id=7, sup=3)
+
         # m21.save(verbose=True)
         # m22 = stubchildmodel(id=7)
         # # print('M22', m22, m22.sup)
