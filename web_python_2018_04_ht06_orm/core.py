@@ -50,6 +50,94 @@ class Scheme:
             model.migrate()
 
 
+
+class BaseField(object):
+
+    def __init__(self, name=None, type=str, model=None, tablename=None, foreign=None, default=None):
+        self.__default = default
+        self.__name = name
+        self.__type = type
+        self.__model = model
+        self.__tablename = tablename
+        self.__foreign = foreign
+
+        if issubclass(self.__type, BaseModel):
+            self.__foreign = self.__type
+
+    def __str__(self):
+        return '<BaseField {}.{}>'.format(self.__model.tablename if self.__model else None, self.__name)
+
+    def __unicode__(self):
+        return self.__str__()
+
+    def __repr__(self):
+        return 'BaseField(name="{}", type={}, model={})'.format(self.__name, self.__type.__name__, self.__model.__name__)
+
+    def __get__(self, obj, model=None):
+        # print('GET', self, self.__hash__(), obj, type)
+        # print('NAME', type.get_name(self))
+        name = self.__name
+        if name is None:
+            name = model.get_field_name(self)
+        foreign = None
+        if issubclass(self.__type, BaseModel):
+        # if isinstance(1self.__type, BaseModel):
+        # if type(self.__type).__name__ == 'type':
+            foreign = self.__type
+            # print('foreign', foreign)
+
+        if not obj:
+            return BaseField(name=name, type=self.__type, model=model, tablename=self.__tablename, default=self.__default)
+
+        return obj._values[name]
+
+        # if self.__name not in obj._values:
+        #     print('KEY', self.__name)
+        # return obj._values[self.__name]
+
+
+        # return (name, self.__type, model, foreign, self.__default)
+
+    @property
+    def model(self):
+        return self.__model
+
+    @property
+    def definition(self):
+        return (self.__name, self.__type, self.__model, self.__foreign, self.__default)
+
+    def __set__(self, model, val):
+        # print(self.__set__, obj, val)
+        # print('Updating', self.name)
+        if not model:
+            raise TypeError('SET', model)
+        name = self.__name
+        if name is None:
+            name = model.get_field_name(self)
+        # print('SET', type(obj), obj)
+        model._values[name] = val
+
+    @property
+    def type(self):
+        return self.__type
+
+    @property
+    def foreign(self):
+        return self.__foreign
+
+    @property
+    def name(self):
+        return self.__name
+
+    @property
+    def tablename(self):
+        return self.__tablename
+
+    pass
+
+
+
+
 class QuerySet:
 
     @staticmethod
@@ -190,90 +278,20 @@ class QuerySet:
         return self._execute(self._get_sql())
 
 
-class BaseField(object):
-
-    def __init__(self, name=None, type=str, model=None, tablename=None, foreign=None, default=None):
-        self.__default = default
-        self.__name = name
-        self.__type = type
-        self.__model = model
-        self.__tablename = tablename
-        self.__foreign = foreign
-
-        if issubclass(self.__type, BaseModel):
-            self.__foreign = self.__type
-
-    def __get__(self, obj, model=None):
-        # print('GET', self, self.__hash__(), obj, type)
-        # print('NAME', type.get_name(self))
-        name = self.__name
-        if name is None:
-            name = model.get_name(self)
-        foreign = None
-        if issubclass(self.__type, BaseModel):
-        # if isinstance(1self.__type, BaseModel):
-        # if type(self.__type).__name__ == 'type':
-            foreign = self.__type
-            # print('foreign', foreign)
-
-        if not obj:
-            return BaseField(name=name, type=self.__type, model=model, tablename=self.__tablename, default=self.__default)
-
-        return obj._values[name]
-
-        # if self.__name not in obj._values:
-        #     print('KEY', self.__name)
-        # return obj._values[self.__name]
-
-
-        # return (name, self.__type, model, foreign, self.__default)
-
-    @property
-    def model(self):
-        return self.__model
-
-    @property
-    def definition(self):
-        return (self.__name, self.__type, self.__model, self.__foreign, self.__default)
-
-    def __set__(self, model, val):
-        # print(self.__set__, obj, val)
-        # print('Updating', self.name)
-        if not model:
-            raise TypeError('SET', model)
-        name = self.__name
-        if name is None:
-            name = model.get_name(self)
-        # print('SET', type(obj), obj)
-        model._values[name] = val
-
-    @property
-    def type(self):
-        return self.__type
-
-    @property
-    def foreign(self):
-        return self.__foreign
-
-    @property
-    def name(self):
-        return self.__name
-
-    @property
-    def tablename(self):
-        return self.__tablename
-
-    pass
-
-
 class BaseModel:
 
     @classmethod
-    def get_name(cls, des):
-        for name, field in cls.__dict__.items():
-            if field is des:
-                return name
+    def get_field_name(cls, field):
+        for k, v in sorted(cls.__dict__.items(), key=lambda item: item[0]):
+            if v is field:
+                return k
         return
+
+    def get_value(self, name):
+        return self._values[name]
+
+    def set_value(self, name, value):
+        self._values[name] = value
 
     @classmethod
     def _get_class_attr_names(cls):
@@ -302,9 +320,14 @@ class BaseModel:
     def _get_fields(cls):
         # return cls._get_class_attrs()
         fields = []
-        for name, attr in cls._get_class_attrs():
-            fields.append(attr)
-        return fields
+        # for name, attr in cls._get_class_attrs():
+        #     fields.append(attr)
+        for key, value in cls.__dict__.items():
+            if isinstance(value, BaseField):
+                # fields.append(value)
+                fields.append(getattr(cls, key))
+        # return fields
+        return sorted(fields, key=lambda field: field.name)
 
     @classmethod
     def _get_field(cls, name):
@@ -325,28 +348,39 @@ class BaseModel:
             'int': 'int',
             'str': 'text'
         }
-        # return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
-        # return [(name, getattr(cls, name)[1]) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        
+        defintions = []
+        # print('FIELDS', cls._get_fields())
+        for field in cls._get_fields():
+            # name = [k for k, v in cls.__dict__.items() if v is field][0] # FIXME
+            # print('FIELD', name, field)
+            # defintions.append((name, typeMap.get(field.type.__name__, field.type)))
+            #
+            defintions.append((field.name, typeMap.get(field.type.__name__, field.type)))
+        return defintions
 
-        defs = []
-        # for name in sorted(cls.__dict__.keys()):
-        #     if not name.startswith('__'):
-        #         attr = getattr(cls, name)
-        #         # print('ATTR', attr)
-        #         if isinstance(attr, BaseField):
-        #             # print('BaseField', attr)
-        #             defs.append((attr.name, typeMap.get(attr.type.__name__, attr.type)))
-        #         else:
-        #             defs.append((name, typeMap.get(attr[1].__name__, attr[1])))
-        for name, attr in cls._get_class_attrs():
-            if isinstance(attr, BaseField):
-                # print('BaseField', attr, attr.type, attr.type.__name__)
-                defs.append((name, typeMap.get(attr.type.__name__, attr.type)))
-            else:
-                defs.append((name, typeMap.get(attr[1].__name__, attr[1])))
-        return defs
-
-        # return [(name, typeMap.get(getattr(cls, name)[1].__name__, getattr(cls, name)[1])) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        # # return [getattr(cls, name) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        # # return [(name, getattr(cls, name)[1]) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+        #
+        # defs = []
+        # # for name in sorted(cls.__dict__.keys()):
+        # #     if not name.startswith('__'):
+        # #         attr = getattr(cls, name)
+        # #         # print('ATTR', attr)
+        # #         if isinstance(attr, BaseField):
+        # #             # print('BaseField', attr)
+        # #             defs.append((attr.name, typeMap.get(attr.type.__name__, attr.type)))
+        # #         else:
+        # #             defs.append((name, typeMap.get(attr[1].__name__, attr[1])))
+        # for name, attr in cls._get_class_attrs():
+        #     if isinstance(attr, BaseField):
+        #         # print('BaseField', attr, attr.type, attr.type.__name__)
+        #         defs.append((name, typeMap.get(attr.type.__name__, attr.type)))
+        #     else:
+        #         defs.append((name, typeMap.get(attr[1].__name__, attr[1])))
+        # return defs
+        #
+        # # return [(name, typeMap.get(getattr(cls, name)[1].__name__, getattr(cls, name)[1])) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
 
     @classmethod
     def _get_field_definitions(cls):

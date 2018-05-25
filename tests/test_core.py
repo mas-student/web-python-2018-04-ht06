@@ -61,6 +61,11 @@ class TestBaseModel(TestCase):
         m = StubParentModel()
         self.assertEquals(m._values, {})
 
+        # m = StubParentModel()
+        # self.assertEquals(m.__dict__.get('a'), None)
+        # m.int1 = 37
+        # self.assertEquals(m.__dict__.get('a'), 37)
+
         StubParentModel.delete()
         m = StubParentModel(data={'id': 3, 'int1': 45, 'str1': 'example'})
         # m.save()
@@ -173,8 +178,8 @@ class TestBaseModel(TestCase):
         m = StubFieldModel()
         # print('FIELD', m.color)
         # print('FIELD', m.color)
-        self.assertEqual(StubFieldModel.simple.definition, ('simple', str, StubFieldModel, None, None))
+        self.assertEqual(StubFieldModel.simple.definition, ('simple', str, StubFieldModel, None, None), 'simple')
         self.assertEqual(StubFieldModel.named.definition, ('title', str, StubFieldModel, None, None))
-        self.assertEqual(StubFieldModel.inited.definition, ('inited', str, StubFieldModel, None, 'begin'))
+        self.assertEqual(StubFieldModel.inited.definition, ('inited', str, StubFieldModel, None, 'begin'), 'inited')
         self.assertEqual(StubFieldModel.number.definition, ('number', int, StubFieldModel, None, None))
         self.assertEqual(StubFieldModel.parent.definition, ('parent', StubParentModel, StubFieldModel, StubParentModel, None))
