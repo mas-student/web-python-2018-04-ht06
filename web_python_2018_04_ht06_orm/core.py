@@ -418,7 +418,7 @@ class BaseModel:
         return c.fetchall()
 
     @classmethod
-    def _create_table(cls):
+    def _create_table(cls, tablename):
         # print('TN', tablename)
 
         # conn = connect()
@@ -456,11 +456,11 @@ class BaseModel:
         # conn.commit()
 
     @classmethod
-    def _drop_table(cls):
+    def _drop_table(cls, tablename):
         try:
             # c.execute('DROP TABLE ?', (tablename, ))
             # c.execute('DROP TABLE {}'.format(tablename))
-            query = 'DROP TABLE {}'.format(cls._get_tablename())
+            query = 'DROP TABLE {}'.format(tablename)
             cls._execute(query)
             # print('DROP', tablename)
         except Exception as e:
@@ -500,6 +500,14 @@ class BaseModel:
             pk
         )
         return cls._execute(query)
+
+    @classmethod
+    def create(cls):
+        cls._create_table(cls._get_tablename())
+
+    @classmethod
+    def delete(cls):
+        cls._drop_table(cls._get_tablename())
 
     def save(self, verbose=False):
         values = OrderedDict()
@@ -590,8 +598,8 @@ class BaseModel:
         # tablename = self.__class__.__name__.lower()
         # self.__create_table(tablename)
         # cls.__create_table(cls._tablename())
-        cls._drop_table()
-        cls._create_table()
+        cls._drop_table(cls._get_tablename())
+        cls._create_table(cls._get_tablename())
 
 
 # class FirstModel(BaseModel):

@@ -48,7 +48,7 @@ class TestBaseModel(TestCase):
         # # m._execute = mock.Mock()
         # m.migrate()
 
-        StubParentModel._drop_table()
+        StubParentModel.delete()
         StubParentModel.migrate()
 
         # m._execute.assert_called()
@@ -61,7 +61,7 @@ class TestBaseModel(TestCase):
         m = StubParentModel()
         self.assertEquals(m._values, {})
 
-        StubParentModel._drop_table()
+        StubParentModel.delete()
         m = StubParentModel(data={'id': 3, 'int1': 45, 'str1': 'example'})
         # m.save()
         self.assertRaises(LookupError, lambda : m.save())
