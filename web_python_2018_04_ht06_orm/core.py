@@ -154,8 +154,8 @@ class QuerySet:
 
     def __init__(self, tablenames, definitions, filters=None, models=None, fields=None, parent=None, joins=None, ons=None):
         self.__parent = parent
-        self.__joins = joins
-        self.__ons = ons
+        self.__joins = joins if joins else []
+        self.__ons = ons if ons else []
         self.__models = self._pack_models(models if models else [])
         # print('MODELS', self.__models)
         # self.__fields = fields if fields else []
@@ -217,10 +217,6 @@ class QuerySet:
             from_=', '.join(self._tablenames),
             where=where).strip()
 
-    @property
-    def sql(self):
-        return self._get_sql()
-
     @classmethod
     def _execute(cls, query):
         conn = connect()
@@ -228,10 +224,6 @@ class QuerySet:
         c.execute(query)
         conn.commit()
         return c.fetchall()
-
-    @classmethod
-    def fromQuerySet(cls):
-        pass
 
     def _get_modified_copy(self, **kwargs):
         data = dict(
@@ -241,7 +233,7 @@ class QuerySet:
             models=self.__models,
             parent=self.__parent,
             joins=self.__joins,
-            ons=self.__ons,
+            # ons=self.__ons,
         )
         data.update(kwargs)
         return QuerySet(**data)
@@ -269,8 +261,9 @@ class QuerySet:
                 fields=self.__fields+[obj] if obj not in self.__fields else self.__fields,
                 models=self._pack_models(self.__models+[obj.model]),
                 # joins=pack(self.__joins+[obj.model])
-                joins=list(OrderedDict.fromkeys(self.__joins+[obj.model])),
-                ons=list(OrderedDict.fromkeys(self.__ons+[obj])),
+                joins=self.__joins+[obj.model],
+                # joins=list(OrderedDict.fromkeys(self.__joins+[obj.model])),
+                # ons=list(OrderedDict.fromkeys(self.__ons+[obj])),
             )
         elif issubclass(obj, BaseModel):
             on = None
@@ -292,6 +285,11 @@ class QuerySet:
 
     def all(self):
         return self._execute(self._get_sql())
+
+    @property
+    def sql(self):
+        return self._get_sql()
+
 
 
 class BaseModel:
