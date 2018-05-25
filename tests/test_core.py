@@ -51,7 +51,7 @@ class TestBaseModel(TestCase):
         self.assertTrue(executeMock.called)
         executeMock.assert_called_with('CREATE TABLE stubparentmodel(id int, int1 int, str1 text)')
 
-    def test_fields(self):
+    def test_model(self):
         m = StubParentModel()
         self.assertEquals(m._values, {})
 
@@ -73,7 +73,7 @@ class TestBaseModel(TestCase):
         # self.assertEqual(m._fields(), [('int1', 'int'), ('str1', 'text')])
         self.assertEqual(m1.all(), [(3, 45, 'example')])
 
-        m2 = StubParentModel(id=3)
+        m2 = StubParentModel.get(id=3)
         m2.int1 = 17
         m2.save()
         self.assertEqual(m2.all(), [(3, 17, 'example')])
@@ -89,7 +89,7 @@ class TestBaseModel(TestCase):
         m1.str1 = 'example'
         m1.save()
         # self.assertEqual(m._fields(), [('int1', 'int'), ('str1', 'text')])
-        m2 = StubParentModel(id=3)
+        m2 = StubParentModel.get(id=3)
         self.assertEqual(m2.int1, 45)
         self.assertEqual(m2.str1, 'example')
 

@@ -321,23 +321,24 @@ class BaseModel:
     def _get_field_definitions(cls):
         return [getattr(cls, name).definition for name in cls._get_class_attr_names()]
 
-    def __init__(self, scheme=None, id=0, record=None, data=None):
+    # def __init__(self, scheme=None, id=0, record=None, data=None):
+    def __init__(self, scheme=None, record=None, data=None):
         # print('INIT')
         self._values = {}
-        self.id = id
+        # self.id = id
         if scheme:
             scheme.add(type(self))
-        if id != 0:
-            record = self.first(id)
-            if record:
-                self._load_from_record(record)
-                # # print('R', record)
-                # # for name, value in zip([c[0] for c in self._columns()], record):
-                # #     setattr(self, name, value)
-                # for (name, typedef), value in zip([c for c in self._columns()], record):
-                #     if type(typedef) == type:
-                #         value = typedef.first(value)
-                #     setattr(self, name, value)
+        # if id != 0:
+        #     record = self.first(id)
+        #     if record:
+        #         self._load_from_record(record)
+        #         # # print('R', record)
+        #         # # for name, value in zip([c[0] for c in self._columns()], record):
+        #         # #     setattr(self, name, value)
+        #         # for (name, typedef), value in zip([c for c in self._columns()], record):
+        #         #     if type(typedef) == type:
+        #         #         value = typedef.first(value)
+        #         #     setattr(self, name, value)
         if record:
             self._load_from_record(record)
         if data:
@@ -475,6 +476,15 @@ class BaseModel:
         records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), id))
         if records:
             return records[0]
+
+    @classmethod
+    def get(cls, id):
+        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), id))
+
+        if len(records) == 0:
+            raise Exception('{} has not record with id = {}'.format(cls.__name__, id))
+
+        return cls(record=records[0])
 
     @classmethod
     def _get_tablename(cls):
