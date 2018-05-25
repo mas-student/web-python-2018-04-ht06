@@ -1,8 +1,12 @@
 from collections import OrderedDict
 from copy import deepcopy
 from itertools import chain
+from functools import reduce
 import sqlite3
 
+
+def pack(values):
+    return reduce(lambda acc, val: acc + [val] if val not in acc else acc, values, [])
 
 def escape():
     pass
@@ -148,8 +152,10 @@ class QuerySet:
                 result.append(model)
         return result
 
-    def __init__(self, tablenames, definitions, filters=None, models=None, fields=None, parent=None):
+    def __init__(self, tablenames, definitions, filters=None, models=None, fields=None, parent=None, joins=None, ons=None):
         self.__parent = parent
+        self.__joins = joins
+        self.__ons = ons
         self.__models = self._pack_models(models if models else [])
         # print('MODELS', self.__models)
         # self.__fields = fields if fields else []
@@ -234,6 +240,8 @@ class QuerySet:
             filters=self.__filters,
             models=self.__models,
             parent=self.__parent,
+            joins=self.__joins,
+            ons=self.__ons,
         )
         data.update(kwargs)
         return QuerySet(**data)
@@ -259,10 +267,18 @@ class QuerySet:
         if isinstance(obj, BaseField):
             return self._get_modified_copy(
                 fields=self.__fields+[obj] if obj not in self.__fields else self.__fields,
-                filtersmodels=self._pack_models(self.__models+[obj.model])
+                models=self._pack_models(self.__models+[obj.model]),
+                # joins=pack(self.__joins+[obj.model])
+                joins=list(OrderedDict.fromkeys(self.__joins+[obj.model])),
+                ons=list(OrderedDict.fromkeys(self.__ons+[obj])),
             )
         elif issubclass(obj, BaseModel):
-            return self._get_modified_copy(models=self._pack_models(self.__models+[obj]))
+            on = None
+            return self._get_modified_copy(
+                models=self._pack_models(self.__models+[obj]),
+                joins=list(OrderedDict.fromkeys(self.__joins + [obj])),
+                # ons=list(OrderedDict.fromkeys(self.__ons + [])),
+            )
         else:
             raise TypeError('JOIN', type(obj))
         # # print('JOIN DEFS', self._definitions, 'models', self.__models),
