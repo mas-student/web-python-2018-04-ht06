@@ -53,6 +53,10 @@ class TestBaseModel(TestCase):
 
     def test_fields(self):
         m = TestParentModel()
+        self.assertEquals(m._values, {})
+
+    def test_fields(self):
+        m = TestParentModel()
         self.assertEqual(m._get_column_defintions(), [('id', 'int'), ('int1', 'int'), ('str1', 'text')])
 
     def test_save(self):
@@ -100,10 +104,11 @@ class TestBaseModel(TestCase):
         m21.migrate()
         m21.id = 7
         m21.sup = m11
-        m21.save(verbose=True)
-        m22 = TestChildModel(id=7)
-        print('M22', m22, m22.sup)
-        # m22.save(verbose=True)
+        m21.save()
+        # m21.save(verbose=True)
+        # m22 = TestChildModel(id=7)
+        # # print('M22', m22, m22.sup)
+        # # m22.save(verbose=True)
 
     def test_query(self):
         TestParentModel.migrate()

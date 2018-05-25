@@ -45,7 +45,7 @@ class QuerySet:
             if type(definition) == tuple:
                 if len(definition) >= 3:
                     ts.append(definition[2])
-        print('TS', ts)
+        # print('TS', ts)
         self.__filters = filters if filters is not None else {}
         # for definition in definitions:
         #     if type(definition) == tuple:
@@ -188,7 +188,14 @@ class BaseField(object):
         if not obj:
             return BaseField(name=name, type=self.__type, model=model, tablename=self.__tablename, default=self.__default)
 
-        return (name, self.__type, model, foreign, self.__default)
+        return obj._values[name]
+
+        # if self.__name not in obj._values:
+        #     print('KEY', self.__name)
+        # return obj._values[self.__name]
+
+
+        # return (name, self.__type, model, foreign, self.__default)
 
     @property
     def model(self):
@@ -198,9 +205,16 @@ class BaseField(object):
     def definition(self):
         return (self.__name, self.__type, self.__model, self.__foreign, self.__default)
 
-    # def __set__(self, obj, val):
-    #     print('Updating', self.name)
-    #     self.val = val
+    def __set__(self, model, val):
+        # print(self.__set__, obj, val)
+        # print('Updating', self.name)
+        if not model:
+            raise TypeError('SET', model)
+        name = self.__name
+        if name is None:
+            name = model.get_name(self)
+        # print('SET', type(obj), obj)
+        model._values[name] = val
 
     @property
     def type(self):
@@ -308,6 +322,8 @@ class BaseModel:
         return [getattr(cls, name).definition for name in cls._get_class_attr_names()]
 
     def __init__(self, scheme=None, id=0, record=None, data=None):
+        # print('INIT')
+        self._values = {}
         self.id = id
         if scheme:
             scheme.add(type(self))
@@ -417,27 +433,30 @@ class BaseModel:
         )
 
     def save(self, verbose=False):
-        fields = OrderedDict()
+        values = OrderedDict()
         # print('ALL 1', self._execute('SELECT * FROM {}'.format(self._tablename())))
-        for field in self._get_column_defintions():
-            # print('F', field)
-            value = getattr(self, field[0])
-            if isinstance(value, BaseModel):
-                value = value.id
-            fields[field[0]] = value
+        # for column_defintions in self._get_column_defintions():
+        #     # print('F', field)
+        #     value = getattr(self, column_defintions[0])
+        #     if isinstance(value, BaseModel):
+        #         value = value.id
+        #     values[column_defintions[0]] = value
+        for key, value in self._values.items():
+            # print('KEY', key, 'VALUE', value)
+            values[key] = value
 
         if self.first(self.id):
             query = 'UPDATE {} SET {} WHERE id = {}'.format(
                 self._get_tablename(),
-                ', '.join(['{} = "{}"'.format(k, v) for k, v in fields.items() if k != 'id']),
+                ', '.join(['{} = "{}"'.format(k, v) for k, v in values.items() if k != 'id']),
                 # self._tablename(),
                 self.id
             )
         else:
             query = 'INSERT INTO {} ({}) VALUES ({})'.format(
                 self._get_tablename(),
-                ', '.join(['{}'.format(k) for k in fields.keys()]),
-                ', '.join(['"{}"'.format(v) for v in fields.values()]),
+                ', '.join(['{}'.format(k) for k in values.keys()]),
+                ', '.join(['"{}"'.format(v) for v in values.values()]),
                 # self._tablename(),
                 # self.id
             )
