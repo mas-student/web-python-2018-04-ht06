@@ -21,7 +21,7 @@ class TestChildModel(BaseModel):
 class TestFieldModel(BaseModel):
     simple = BaseField()
     named = BaseField(name='title')
-    inited = BaseField(initval='begin')
+    inited = BaseField(default='begin')
     number = BaseField(type=int)
     parent = BaseField(type=TestParentModel)
 
@@ -53,7 +53,7 @@ class TestBaseModel(TestCase):
 
     def test_fields(self):
         m = TestParentModel()
-        self.assertEqual(m._field_defs(), [('id', 'int'), ('int1', 'int'), ('str1', 'text')])
+        self.assertEqual(m._get_column_defintions(), [('id', 'int'), ('int1', 'int'), ('str1', 'text')])
 
     def test_save(self):
         # scheme = Scheme()
@@ -153,9 +153,8 @@ class TestBaseModel(TestCase):
         m = TestFieldModel()
         # print('FIELD', m.color)
         # print('FIELD', m.color)
-        self.assertEqual(TestFieldModel.simple, ('simple', str, TestFieldModel, None, None))
-        self.assertEqual(m.simple, ('simple', str, TestFieldModel, None, None))
-        self.assertEqual(m.named, ('title', str, TestFieldModel, None, None))
-        self.assertEqual(m.named, ('title', str, TestFieldModel, None, None))
-        self.assertEqual(m.number, ('number', int, TestFieldModel, None, None))
-        self.assertEqual(m.parent, ('parent', TestParentModel, TestFieldModel, TestParentModel, None))
+        self.assertEqual(TestFieldModel.simple.definition, ('simple', str, TestFieldModel, None, None))
+        self.assertEqual(TestFieldModel.named.definition, ('title', str, TestFieldModel, None, None))
+        self.assertEqual(TestFieldModel.inited.definition, ('inited', str, TestFieldModel, None, 'begin'))
+        self.assertEqual(TestFieldModel.number.definition, ('number', int, TestFieldModel, None, None))
+        self.assertEqual(TestFieldModel.parent.definition, ('parent', TestParentModel, TestFieldModel, TestParentModel, None))

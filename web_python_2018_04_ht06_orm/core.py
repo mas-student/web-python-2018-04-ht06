@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from copy import deepcopy
+from itertools import chain
 import sqlite3
 
 
@@ -45,7 +46,7 @@ class QuerySet:
                 if len(definition) >= 3:
                     ts.append(definition[2])
         print('TS', ts)
-        self._filters = filters if filters is not None else {}
+        self.__filters = filters if filters is not None else {}
         # for definition in definitions:
         #     if type(definition) == tuple:
         #         self._fieldnames.append(definition[0])
@@ -82,8 +83,8 @@ class QuerySet:
                     # print('ON', on)
 
         where = ''
-        if len(self._filters) > 0:
-            where = ' WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self._filters.items()]))
+        if len(self.__filters) > 0:
+            where = ' WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self.__filters.items()]))
 
         return 'SELECT {select} FROM {from_}{on}{where}'.format(
             select=', '.join(self._get_fieldnames()),
@@ -111,7 +112,7 @@ class QuerySet:
         data = dict(
             tablenames=self._tablenames,
             definitions=self._definitions,
-            filters=self._filters,
+            filters=self.__filters,
             models=self.__models,
             parent=self.__parent,
         )
@@ -119,7 +120,8 @@ class QuerySet:
         return QuerySet(**data)
 
     def filter(self, **filters):
-        return self._get_modified_copy(filters = filters)
+        # return self._get_modified_copy(filters = filters)
+        return self._get_modified_copy(filters = dict(chain(self.__filters.items(), filters.items())))
         # _filters = deepcopy(self._filters)
         # _filters.update(filters)
         # return QuerySet(
@@ -130,8 +132,20 @@ class QuerySet:
         #     parent=self.__parent,
         # )
 
-    def join(self, model):
-        return self._get_modified_copy(models=self._pack_models(self.__models+[model]))
+    # def join(self, model):
+    #     return self._get_modified_copy(models=self._pack_models(self.__models + [model]))
+
+    def join(self, obj):
+
+        if isinstance(obj, BaseField):
+            return self._get_modified_copy(
+                fields=self.__fields+[obj] if obj not in self.__fields else self.__fields,
+                filtersmodels=self._pack_models(self.__models+[obj.model])
+            )
+        elif issubclass(obj, BaseModel):
+            return self._get_modified_copy(models=self._pack_models(self.__models+[obj]))
+        else:
+            raise TypeError('JOIN', type(obj))
         # # print('JOIN DEFS', self._definitions, 'models', self.__models),
         # return QuerySet(
         #     tablenames=self._tablenames+[model._get_tablename()],
@@ -147,28 +161,42 @@ class QuerySet:
 
 class BaseField(object):
 
-    def __init__(self, initval=None, name=None, type=str, tablename=None):
-        self.__value = initval
+    def __init__(self, name=None, type=str, model=None, tablename=None, foreign=None, default=None):
+        self.__default = default
         self.__name = name
         self.__type = type
+        self.__model = model
         self.__tablename = tablename
-        self.__foreign = None
+        self.__foreign = foreign
+
         if issubclass(self.__type, BaseModel):
             self.__foreign = self.__type
 
-    def __get__(self, obj, atype=None):
+    def __get__(self, obj, model=None):
         # print('GET', self, self.__hash__(), obj, type)
         # print('NAME', type.get_name(self))
         name = self.__name
         if name is None:
-            name = atype.get_name(self)
+            name = model.get_name(self)
         foreign = None
         if issubclass(self.__type, BaseModel):
         # if isinstance(1self.__type, BaseModel):
         # if type(self.__type).__name__ == 'type':
             foreign = self.__type
             # print('foreign', foreign)
-        return (name, self.__type, atype, foreign, self.__value)
+
+        if not obj:
+            return BaseField(name=name, type=self.__type, model=model, tablename=self.__tablename, default=self.__default)
+
+        return (name, self.__type, model, foreign, self.__default)
+
+    @property
+    def model(self):
+        return self.__model
+
+    @property
+    def definition(self):
+        return (self.__name, self.__type, self.__model, self.__foreign, self.__default)
 
     # def __set__(self, obj, val):
     #     print('Updating', self.name)
@@ -247,7 +275,7 @@ class BaseModel:
         return self._get_fields()
 
     @classmethod
-    def _field_defs(cls):
+    def _get_column_defintions(cls):
         typeMap = {
             'int': 'int',
             'str': 'text'
@@ -277,7 +305,7 @@ class BaseModel:
 
     @classmethod
     def _get_field_definitions(cls):
-        return [getattr(cls, name) for name in cls._get_class_attr_names()]
+        return [getattr(cls, name).definition for name in cls._get_class_attr_names()]
 
     def __init__(self, scheme=None, id=0, record=None, data=None):
         self.id = id
@@ -304,7 +332,7 @@ class BaseModel:
         # record = [data[key] for key in keys]
         # self._load_from_record(record)
 
-        fieldDefinitions = dict(self._field_defs())
+        fieldDefinitions = dict(self._get_column_defintions())
         for key, value in data.items():
             typedef = fieldDefinitions[key]
             if type(typedef) == type:
@@ -312,7 +340,7 @@ class BaseModel:
             setattr(self, key, value)
 
     def _load_from_record(self, record):
-        for (name, typedef), value in zip([c for c in self._field_defs()], record):
+        for (name, typedef), value in zip([c for c in self._get_column_defintions()], record):
             if type(typedef) == type:
                 value = typedef.first(value)
             setattr(self, name, value)
@@ -345,7 +373,7 @@ class BaseModel:
             # Create table
             # c.execute('''CREATE TABLE ? (key text)''', (tablename, ))
             # query = '''CREATE TABLE {} (key text)'''.format(tablename)
-            columns = cls._field_defs()
+            columns = cls._get_column_defintions()
             for i in range(len(columns)):
                 # print(type(columns[i][1]), str(type(columns[i][1])))
                 if str(type(columns[i][1])) == "<class 'type'>": # FIXME
@@ -375,7 +403,9 @@ class BaseModel:
             print(e)
 
     @classmethod
-    def query(cls, *definitions):
+    def query(cls, *fields):
+        definitions = [field.definition for field in fields]
+        models = [field.model for field in fields]
         field_dict = cls._get_field_dict()
         # print('FIELD_DICT', field_dict)
         return QuerySet(
@@ -389,7 +419,7 @@ class BaseModel:
     def save(self, verbose=False):
         fields = OrderedDict()
         # print('ALL 1', self._execute('SELECT * FROM {}'.format(self._tablename())))
-        for field in self._field_defs():
+        for field in self._get_column_defintions():
             # print('F', field)
             value = getattr(self, field[0])
             if isinstance(value, BaseModel):
