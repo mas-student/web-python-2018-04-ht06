@@ -53,7 +53,7 @@ class TestBaseModel(TestCase):
 
     def test_fields(self):
         m = TestParentModel()
-        self.assertEqual(m._field_definitions(), [('id', 'int'), ('int1', 'int'), ('str1', 'text')])
+        self.assertEqual(m._field_defs(), [('id', 'int'), ('int1', 'int'), ('str1', 'text')])
 
     def test_save(self):
         # scheme = Scheme()
@@ -128,6 +128,8 @@ class TestBaseModel(TestCase):
         TestChildModel.migrate()
         TestChildModel(data={'id': 1, 'sup': p2, 'str2': 'text1'}).save()
         TestChildModel(data={'id': 4, 'sup': p1, 'str2': 'text2'}).save()
+        qs = TestChildModel.query(TestChildModel.str2, TestParentModel.str1)
+        self.assertEqual(qs.sql, 'SELECT str2, str1 FROM testchildmodel, testparentmodel ON testchildmodel.sup = testparentmodel.id')
 
     def test_execute(self):
         TestParentModel.migrate()
@@ -151,9 +153,9 @@ class TestBaseModel(TestCase):
         m = TestFieldModel()
         # print('FIELD', m.color)
         # print('FIELD', m.color)
-        self.assertEqual(TestFieldModel.simple, ('simple', str, 'testfieldmodel', None, None))
-        self.assertEqual(m.simple, ('simple', str, 'testfieldmodel', None, None))
-        self.assertEqual(m.named, ('title', str, 'testfieldmodel', None, None))
-        self.assertEqual(m.named, ('title', str, 'testfieldmodel', None, None))
-        self.assertEqual(m.number, ('number', int, 'testfieldmodel', None, None))
-        self.assertEqual(m.parent, ('parent', TestParentModel, 'testfieldmodel', 'testparentmodel', None))
+        self.assertEqual(TestFieldModel.simple, ('simple', str, TestFieldModel, None, None))
+        self.assertEqual(m.simple, ('simple', str, TestFieldModel, None, None))
+        self.assertEqual(m.named, ('title', str, TestFieldModel, None, None))
+        self.assertEqual(m.named, ('title', str, TestFieldModel, None, None))
+        self.assertEqual(m.number, ('number', int, TestFieldModel, None, None))
+        self.assertEqual(m.parent, ('parent', TestParentModel, TestFieldModel, TestParentModel, None))

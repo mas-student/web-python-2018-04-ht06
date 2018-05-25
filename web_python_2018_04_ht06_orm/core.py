@@ -20,11 +20,23 @@ class Scheme:
 
 class QuerySet:
 
-    def __init__(self, tablenames, definitions, filters=None, models=None, fields=None):
-        self.__models = models if models else []
-        self.__fields = fields if fields else []
+    @staticmethod
+    def _pack_models(models):
+        result = []
+        for model in models:
+            if model not in result:
+                result.append(model)
+        return result
+
+    def __init__(self, tablenames, definitions, filters=None, models=None, fields=None, parent=None):
+        self.__parent = parent
+        self.__models = self._pack_models(models if models else [])
+        print('MODELS', self.__models)
+        # self.__fields = fields if fields else []
+        self.__fields = [definition[2]._get_field(definition[0]) for definition in definitions]
         print('FIELDS', self.__fields)
-        self._tablenames = tablenames
+        # self._tablenames = tablenames
+        self._tablenames = [model._get_tablename() for model in self.__models]
         self._fieldnames = []
         self._definitions = definitions
         ts = []
@@ -55,19 +67,27 @@ class QuerySet:
 
     def _get_sql(self):
         ons = []
-        for model in self.__models:
-            for field in model._get_fields():
-                print('MODEL', model, 'FIELD', field)
+        on = ''
+        # for model in self.__models:
+        #     for field in model._get_fields():
+        #         print('MODEL', model, 'FIELD', field)
         # for definition in self._definitions:
         #     if definition[3] and definition[3] in self._tablenames[1:]:
         #         print('ON {}.{} = {}.id'.format(self._tablenames[0], definition[0], definition[3]))
+        for model in self.__models:
+            for definition in model._get_field_definitions():
+                print('!!!', definition, self.__parent, definition[2] is self.__parent)
+                if definition[3] and definition[2] is self.__parent:
+                    on = ' ON {}.{} = {}.id'.format(definition[2]._get_tablename(), definition[0], definition[3]._get_tablename())
+                    print(on)
 
         where = ''
         if len(self._filters) > 0:
-            where = 'WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self._filters.items()]))
+            where = ' WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self._filters.items()]))
 
-        return 'SELECT {select} FROM {from_} {where}'.format(
+        return 'SELECT {select} FROM {from_}{on}{where}'.format(
             select=', '.join(self._get_fieldnames()),
+            on=on,
             from_=', '.join(self._tablenames),
             where=where).strip()
 
@@ -89,14 +109,20 @@ class QuerySet:
         return QuerySet(
             tablenames=self._tablenames,
             definitions=self._definitions,
-            filters=_filters)
+            filters=_filters,
+            models=self.__models,
+            parent=self.__parent,
+        )
 
     def join(self, model):
-        print('JOIN DEFS', self._definitions)
+        print('JOIN DEFS', self._definitions, 'models', self.__models),
         return QuerySet(
             tablenames=self._tablenames+[model._get_tablename()],
             definitions=self._definitions,
-            filters=self._filters)
+            filters=self._filters,
+            models=self._pack_models(self.__models+[model]),
+            parent=self.__parent,
+        )
 
     def all(self):
         return self._execute(self._get_sql())
@@ -123,9 +149,9 @@ class BaseField(object):
         if issubclass(self.__type, BaseModel):
         # if isinstance(1self.__type, BaseModel):
         # if type(self.__type).__name__ == 'type':
-            foreign = self.__type._get_tablename()
+            foreign = self.__type
             print('foreign', foreign)
-        return (name, self.__type, atype._get_tablename(), foreign, self.__value)
+        return (name, self.__type, atype, foreign, self.__value)
 
     # def __set__(self, obj, val):
     #     print('Updating', self.name)
@@ -160,14 +186,19 @@ class BaseModel:
         return
 
     @classmethod
+    def _get_class_attr_names(cls):
+        return [name for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
+
+    @classmethod
     def _get_class_attrs(cls):
-        attrs = []
-        for name in sorted(cls.__dict__.keys()):
-            if not name.startswith('__'):
-                attrs.append((name, cls.__dict__[name]))
-                # attrs.append((name, getattr(cls, name)))
-                # print('ATTR', attr)
-        return attrs
+        return [(name, cls.__dict__[name]) for name in cls._get_class_attr_names()]
+        # attrs = []
+        # for name in sorted(cls.__dict__.keys()):
+        #     if not name.startswith('__'):
+        #         attrs.append((name, cls.__dict__[name]))
+        #         # attrs.append((name, getattr(cls, name)))
+        #         # print('ATTR', attr)
+        # return attrs
 
     @classmethod
     def _get_field_dict(cls):
@@ -185,12 +216,21 @@ class BaseModel:
             fields.append(attr)
         return fields
 
+    @classmethod
+    def _get_field(cls, name):
+        # return cls._get_class_attrs()
+        fields = []
+        for key, value in cls._get_class_attrs():
+            if key == name:
+                return value
+        return
+
     @property
     def fields(self):
         return self._get_fields()
 
     @classmethod
-    def _field_definitions(cls):
+    def _field_defs(cls):
         typeMap = {
             'int': 'int',
             'str': 'text'
@@ -218,6 +258,9 @@ class BaseModel:
 
         # return [(name, typeMap.get(getattr(cls, name)[1].__name__, getattr(cls, name)[1])) for name in sorted(cls.__dict__.keys()) if not name.startswith('__')]
 
+    @classmethod
+    def _get_field_definitions(cls):
+        return [getattr(cls, name) for name in cls._get_class_attr_names()]
 
     def __init__(self, scheme=None, id=0, record=None, data=None):
         self.id = id
@@ -244,7 +287,7 @@ class BaseModel:
         # record = [data[key] for key in keys]
         # self._load_from_record(record)
 
-        fieldDefinitions = dict(self._field_definitions())
+        fieldDefinitions = dict(self._field_defs())
         for key, value in data.items():
             typedef = fieldDefinitions[key]
             if type(typedef) == type:
@@ -252,7 +295,7 @@ class BaseModel:
             setattr(self, key, value)
 
     def _load_from_record(self, record):
-        for (name, typedef), value in zip([c for c in self._field_definitions()], record):
+        for (name, typedef), value in zip([c for c in self._field_defs()], record):
             if type(typedef) == type:
                 value = typedef.first(value)
             setattr(self, name, value)
@@ -285,7 +328,7 @@ class BaseModel:
             # Create table
             # c.execute('''CREATE TABLE ? (key text)''', (tablename, ))
             # query = '''CREATE TABLE {} (key text)'''.format(tablename)
-            columns = cls._field_definitions()
+            columns = cls._field_defs()
             for i in range(len(columns)):
                 # print(type(columns[i][1]), str(type(columns[i][1])))
                 if str(type(columns[i][1])) == "<class 'type'>": # FIXME
@@ -321,14 +364,15 @@ class BaseModel:
         return QuerySet(
             tablenames=[cls._get_tablename()],
             definitions=definitions,
-            models=[cls],
-            fields=[field_dict.get(definition[0]) for definition in definitions]
+            models=[definition[2] for definition in definitions],
+            fields=[field_dict.get(definition[0]) for definition in definitions],
+            parent=cls
         )
 
     def save(self, verbose=False):
         fields = OrderedDict()
         # print('ALL 1', self._execute('SELECT * FROM {}'.format(self._tablename())))
-        for field in self._field_definitions():
+        for field in self._field_defs():
             # print('F', field)
             value = getattr(self, field[0])
             if isinstance(value, BaseModel):
