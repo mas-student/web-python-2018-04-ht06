@@ -48,7 +48,7 @@ class TestBaseModel(TestCase):
         # # m._execute = mock.Mock()
         # m.migrate()
 
-        StubParentModel.delete()
+        StubParentModel.drop()
         StubParentModel.migrate()
 
         # m._execute.assert_called()
@@ -66,7 +66,7 @@ class TestBaseModel(TestCase):
         # m.int1 = 37
         # self.assertEquals(m.__dict__.get('a'), 37)
 
-        StubParentModel.delete()
+        StubParentModel.drop()
         m = StubParentModel(data={'id': 3, 'int1': 45, 'str1': 'example'})
         # m.save()
         self.assertRaises(LookupError, lambda : m.save())
@@ -162,9 +162,21 @@ class TestBaseModel(TestCase):
         StubChildModel(data={'id': 4, 'sup': p1, 'str2': 'text2'}).save()
 
         qs = StubChildModel.query().join(StubParentModel)
-        self.assertEqual(qs.sql, 'SELECT stubchildmodel.id, stubchildmodel.str2, stubchildmodel.sup FROM stubchildmodel, stubparentmodel ON stubchildmodel.sup = stubparentmodel.id')
-        # qs = StubChildModel.query(StubChildModel.str2, StubParentModel.str1)
+        self.assertEqual(
+            qs.sql,
+            'SELECT {name1}.id, {name1}.str2, {name1}.sup FROM {name1}, {name2} ON {name1}.sup = {name2}.id'.format(
+                name1='stubchildmodel', name2='stubparentmodel'), 'StubChildModel.query().join(StubParentModel).sql')
+
+        # qs = StubChildModel.query().join(StubParentModel)
+        # self.assertEqual(qs.sql, 'SELECT stubchildmodel.id, stubchildmodel.str2, stubchildmodel.sup FROM stubchildmodel, stubparentmodel ON stubchildmodel.sup = stubparentmodel.id')
+        # # qs = StubChildModel.query(StubChildModel.str2, StubParentModel.str1)
         # self.assertEqual(qs.sql, 'SELECT id, str2, sup FROM stubchildmodel, stubparentmodel ON stubchildmodel.sup = stubparentmodel.id')
+
+        qs = StubChildModel.query().join(StubChildModel.sup)
+        self.assertEqual(
+            qs.sql,
+            'SELECT {name1}.id, {name1}.str2, {name1}.sup FROM {name1}, {name2} ON {name1}.sup = {name2}.id'.format(
+                name1='stubchildmodel', name2='stubparentmodel'), 'StubChildModel.query().join(StubChildModel.sup).sql')
 
     # def test_execute(self):
     #     StubParentModel.migrate()
@@ -193,3 +205,12 @@ class TestBaseModel(TestCase):
         self.assertEqual(StubFieldModel.inited.definition, ('inited', str, StubFieldModel, None, 'begin'), 'inited')
         self.assertEqual(StubFieldModel.number.definition, ('number', int, StubFieldModel, None, None))
         self.assertEqual(StubFieldModel.parent.definition, ('parent', StubParentModel, StubFieldModel, StubParentModel, None))
+
+    def test_delete(self):
+        StubParentModel.migrate()
+        m = StubParentModel(data={'id': 3, 'int1': 45, 'str1': 'example'})
+        m.save()
+
+        self.assertEqual(StubParentModel.query().values(), [(3, 45, 'example')])
+        m.delete()
+        self.assertEqual(StubParentModel.query().values(), [])
