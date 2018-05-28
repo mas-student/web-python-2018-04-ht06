@@ -2,7 +2,7 @@ from sqlite3 import OperationalError
 from unittest import TestCase, mock
 from unittest.mock import patch
 
-from web_python_2018_04_ht06_orm.core import connect, table, Scheme, BaseModel, BaseField
+from web_python_2018_04_ht06_orm.core import connect, table, Scheme, BaseModel, BaseField, QuerySet
 
 
 class StubParentModel(BaseModel):
@@ -138,13 +138,20 @@ class TestBaseModel(TestCase):
         # m2 = TestSupModel(data={'id': 2, 'int1': 79, 'str1': 'sample'})
         # m2.save()
         m2 = StubParentModel(data={'id': 2, 'int1': 79, 'str1': 'sample'}).save()
-        m2.save()
-        qs = StubParentModel.query(StubParentModel.int1, StubParentModel.str1)
-        self.assertEqual(qs.names, ['int1', 'str1'])
-        self.assertEqual(qs.sql, 'SELECT int1, str1 FROM stubparentmodel')
-        self.assertEqual(qs.all(), [(45, 'example'), (79, 'sample')])
-        self.assertEqual(qs.filter(int1=45).sql, 'SELECT int1, str1 FROM stubparentmodel WHERE int1 == "45"')
-        self.assertEqual(qs.filter(int1=45).all(), [(45, 'example')])
+        # m2.save()
+
+
+        qs1 = StubParentModel.query()
+        # qs2 = QuerySet(models=[StubParentModel])
+        # qs2 = QuerySet([], [], models=[StubParentModel])
+        qs2 = QuerySet(StubParentModel)
+        # self.assertEqual(qs.names, ['id', 'int1', 'str1'])
+        self.assertEqual(qs1.sql, 'SELECT id, int1, str1 FROM stubparentmodel')
+        self.assertEqual(qs2.sql, 'SELECT id, int1, str1 FROM stubparentmodel')
+        self.assertEqual([m.values for m in qs1.all()], [(3, 45, 'example'), (2, 79, 'sample')])
+        self.assertEqual(qs1.values(), [(3, 45, 'example'), (2, 79, 'sample')])
+        self.assertEqual(qs1.filter(int1=45).sql, 'SELECT id, int1, str1 FROM stubparentmodel WHERE int1 == "45"')
+        self.assertEqual(qs1.filter(int1=45).values(), [(3, 45, 'example')])
 
     def test_join(self):
         StubParentModel.migrate()
@@ -153,26 +160,29 @@ class TestBaseModel(TestCase):
         StubChildModel.migrate()
         StubChildModel(data={'id': 1, 'sup': p2, 'str2': 'text1'}).save()
         StubChildModel(data={'id': 4, 'sup': p1, 'str2': 'text2'}).save()
-        qs = StubChildModel.query(StubChildModel.str2, StubParentModel.str1)
-        self.assertEqual(qs.sql, 'SELECT str2, str1 FROM stubchildmodel, stubparentmodel ON stubchildmodel.sup = stubparentmodel.id')
 
-    def test_execute(self):
-        StubParentModel.migrate()
-        p1 = StubParentModel(data={'id': 2, 'int1': 78, 'str1': 'example'}).save()
-        p2 = StubParentModel(data={'id': 3, 'int1': 45, 'str1': 'sample'}).save()
-        StubChildModel.migrate()
-        StubChildModel(data={'id': 1, 'sup': p2, 'str2': 'text1'}).save()
-        StubChildModel(data={'id': 4, 'sup': p1, 'str2': 'text2'}).save()
-        qs = StubParentModel.query(StubParentModel.str1, StubChildModel.str2).join(StubChildModel)
-        self.assertEqual(qs.sql, 'SELECT str1, str2 FROM stubparentmodel, stubchildmodel')
-        self.assertEqual(qs.filter(int1=45).sql, 'SELECT str1, str2 FROM stubparentmodel, stubchildmodel WHERE int1 == "45"')
-        self.assertEqual(qs.filter(int1=45).all(), [('sample', 'text1'), ('sample', 'text2')])
-        # self.assertEqual(qs.all(), [(45, 'example')])
+        qs = StubChildModel.query().join(StubParentModel)
+        self.assertEqual(qs.sql, 'SELECT stubchildmodel.id, stubchildmodel.str2, stubchildmodel.sup FROM stubchildmodel, stubparentmodel ON stubchildmodel.sup = stubparentmodel.id')
+        # qs = StubChildModel.query(StubChildModel.str2, StubParentModel.str1)
+        # self.assertEqual(qs.sql, 'SELECT id, str2, sup FROM stubchildmodel, stubparentmodel ON stubchildmodel.sup = stubparentmodel.id')
 
-        # self.assertEqual(qs.filter(int1=45).all(), [(45, 'example')])
-        # self.assertEqual(stubparentmodel._execute(
-        #     'SELECT int1, str1, str2 FROM stubparentmodel, stubchildmodel'
-        # ), [])
+    # def test_execute(self):
+    #     StubParentModel.migrate()
+    #     p1 = StubParentModel(data={'id': 2, 'int1': 78, 'str1': 'example'}).save()
+    #     p2 = StubParentModel(data={'id': 3, 'int1': 45, 'str1': 'sample'}).save()
+    #     StubChildModel.migrate()
+    #     StubChildModel(data={'id': 1, 'sup': p2, 'str2': 'text1'}).save()
+    #     StubChildModel(data={'id': 4, 'sup': p1, 'str2': 'text2'}).save()
+    #     qs = StubParentModel.query()# .join(StubChildModel)
+    #     self.assertEqual(qs.sql, 'SELECT id, int1, str1 FROM stubparentmodel')
+    #     self.assertEqual(qs.filter(int1=45).sql, 'SELECT id, int1, str1 FROM stubparentmodel WHERE int1 == "45"')
+    #     # self.assertEqual(qs.filter(int1=45).values(), [('sample', 'text1'), ('sample', 'text2')])
+    #     # self.assertEqual(qs.all(), [(45, 'example')])
+    #
+    #     # self.assertEqual(qs.filter(int1=45).all(), [(45, 'example')])
+    #     # self.assertEqual(stubparentmodel._execute(
+    #     #     'SELECT int1, str1, str2 FROM stubparentmodel, stubchildmodel'
+    #     # ), [])
 
     def test_field(self):
         m = StubFieldModel()

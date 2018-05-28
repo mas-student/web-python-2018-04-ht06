@@ -80,6 +80,7 @@ class BaseField(object):
     def __get__(self, obj, model=None):
         # print('GET', self, self.__hash__(), obj, type)
         # print('NAME', type.get_name(self))
+        # print('NAME', self.__name, model.get_field_name(self))
         name = self.__name
         if name is None:
             name = model.get_field_name(self)
@@ -91,9 +92,10 @@ class BaseField(object):
             # print('foreign', foreign)
 
         if not obj:
-            return BaseField(name=name, type=self.__type, model=model, tablename=self.__tablename, default=self.__default)
+            return BaseField(name=name, type=self.__type, model=model, tablename=self.__tablename, foreign=foreign, default=self.__default)
 
-        return obj._values[name]
+        # return obj._values[name]
+        return obj.get_value(name)
 
         # if self.__name not in obj._values:
         #     print('KEY', self.__name)
@@ -122,6 +124,10 @@ class BaseField(object):
         model._values[name] = val
 
     @property
+    def name(self):
+        return self.__name
+
+    @property
     def type(self):
         return self.__type
 
@@ -130,166 +136,14 @@ class BaseField(object):
         return self.__foreign
 
     @property
-    def name(self):
-        return self.__name
-
-    @property
     def tablename(self):
         return self.__tablename
 
+    # @property
+    # def value(self):
+    #     return self.__model.get_value(self.__name)
+
     pass
-
-
-
-
-class QuerySet:
-
-    @staticmethod
-    def _pack_models(models):
-        result = []
-        for model in models:
-            if model not in result:
-                result.append(model)
-        return result
-
-    def __init__(self, tablenames, definitions, filters=None, models=None, fields=None, parent=None, joins=None, ons=None):
-        self.__parent = parent
-        self.__joins = joins if joins else []
-        self.__ons = ons if ons else []
-        self.__models = self._pack_models(models if models else [])
-        # print('MODELS', self.__models)
-        # self.__fields = fields if fields else []
-        self.__fields = [definition[2]._get_field(definition[0]) for definition in definitions]
-        # print('FIELDS', self.__fields)
-        # self._tablenames = tablenames
-        self._tablenames = [model._get_tablename() for model in self.__models]
-        self._fieldnames = []
-        self._definitions = definitions
-        ts = []
-        for definition in self._definitions:
-            if type(definition) == tuple:
-                if len(definition) >= 3:
-                    ts.append(definition[2])
-        # print('TS', ts)
-        self.__filters = filters if filters is not None else {}
-        # for definition in definitions:
-        #     if type(definition) == tuple:
-        #         self._fieldnames.append(definition[0])
-
-    def _get_fieldnames(self):
-        # return self._fieldnames
-        # return self._fieldnames
-        result = []
-        for definition in self._definitions:
-            if type(definition) == tuple:
-                result.append(definition[0])
-                # if len(definition) >= 3:
-                #     print('TABLENAME', definition[2])
-        return result
-
-    @property
-    def names(self):
-        return self._get_fieldnames()
-
-    def _get_sql(self):
-        ons = []
-        on = ''
-        # for model in self.__models:
-        #     for field in model._get_fields():
-        #         print('MODEL', model, 'FIELD', field)
-        # for definition in self._definitions:
-        #     if definition[3] and definition[3] in self._tablenames[1:]:
-        #         print('ON {}.{} = {}.id'.format(self._tablenames[0], definition[0], definition[3]))
-        for model in self.__models:
-            for definition in model._get_field_definitions():
-                # print('!!!', definition, self.__parent, definition[2] is self.__parent)
-                if definition[3] and definition[2] is self.__parent:
-                    on = ' ON {}.{} = {}.id'.format(definition[2]._get_tablename(), definition[0], definition[3]._get_tablename())
-                    # print('ON', on)
-
-        where = ''
-        if len(self.__filters) > 0:
-            where = ' WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self.__filters.items()]))
-
-        return 'SELECT {select} FROM {from_}{on}{where}'.format(
-            select=', '.join(self._get_fieldnames()),
-            on=on,
-            from_=', '.join(self._tablenames),
-            where=where).strip()
-
-    @classmethod
-    def _execute(cls, query):
-        conn = connect()
-        c = conn.cursor()
-        c.execute(query)
-        conn.commit()
-        return c.fetchall()
-
-    def _get_modified_copy(self, **kwargs):
-        data = dict(
-            tablenames=self._tablenames,
-            definitions=self._definitions,
-            filters=self.__filters,
-            models=self.__models,
-            parent=self.__parent,
-            joins=self.__joins,
-            # ons=self.__ons,
-        )
-        data.update(kwargs)
-        return QuerySet(**data)
-
-    def filter(self, **filters):
-        # return self._get_modified_copy(filters = filters)
-        return self._get_modified_copy(filters = dict(chain(self.__filters.items(), filters.items())))
-        # _filters = deepcopy(self._filters)
-        # _filters.update(filters)
-        # return QuerySet(
-        #     tablenames=self._tablenames,
-        #     definitions=self._definitions,
-        #     filters=_filters,
-        #     models=self.__models,
-        #     parent=self.__parent,
-        # )
-
-    # def join(self, model):
-    #     return self._get_modified_copy(models=self._pack_models(self.__models + [model]))
-
-    def join(self, obj):
-
-        if isinstance(obj, BaseField):
-            return self._get_modified_copy(
-                fields=self.__fields+[obj] if obj not in self.__fields else self.__fields,
-                models=self._pack_models(self.__models+[obj.model]),
-                # joins=pack(self.__joins+[obj.model])
-                joins=self.__joins+[obj.model],
-                # joins=list(OrderedDict.fromkeys(self.__joins+[obj.model])),
-                # ons=list(OrderedDict.fromkeys(self.__ons+[obj])),
-            )
-        elif issubclass(obj, BaseModel):
-            on = None
-            return self._get_modified_copy(
-                models=self._pack_models(self.__models+[obj]),
-                joins=list(OrderedDict.fromkeys(self.__joins + [obj])),
-                # ons=list(OrderedDict.fromkeys(self.__ons + [])),
-            )
-        else:
-            raise TypeError('JOIN', type(obj))
-        # # print('JOIN DEFS', self._definitions, 'models', self.__models),
-        # return QuerySet(
-        #     tablenames=self._tablenames+[model._get_tablename()],
-        #     definitions=self._definitions,
-        #     filters=self._filters,
-        #     models=self._pack_models(self.__models+[model]),
-        #     parent=self.__parent,
-        # )
-
-    def all(self):
-        return self._execute(self._get_sql())
-
-    @property
-    def sql(self):
-        return self._get_sql()
-
 
 
 class BaseModel:
@@ -355,6 +209,12 @@ class BaseModel:
     @property
     def fields(self):
         return self._get_fields()
+
+    @property
+    def values(self):
+        # print('NAMES', [field.name for field in self._get_fields()])
+        # return [field.value for field in self._get_fields()]
+        return tuple([self._values.get(field.name) for field in self._get_fields()])
 
     @classmethod
     def _get_column_defintions(cls):
@@ -626,11 +486,13 @@ class BaseModel:
         field_dict = cls._get_field_dict()
         # print('FIELD_DICT', field_dict)
         return QuerySet(
-            tablenames=[cls._get_tablename()],
-            definitions=definitions,
-            models=[definition[2] for definition in definitions],
-            fields=[field_dict.get(definition[0]) for definition in definitions],
-            parent=cls
+            cls
+            # [], # tablenames=[cls._get_tablename()],
+            # [], # definitions=definitions,
+            # # models=[definition[2] for definition in definitions],
+            # models=[cls],
+            # fields=[], # fields=[field_dict.get(definition[0]) for definition in definitions],
+            # # parent=cls
         )
 
     @classmethod
@@ -648,6 +510,210 @@ class BaseModel:
         # cls.__create_table(cls._tablename())
         cls._drop_table(cls._get_tablename())
         cls._create_table(cls._get_tablename())
+
+
+class QuerySet:
+
+    @staticmethod
+    def _pack_models(models):
+        result = []
+        for model in models:
+            if model not in result:
+                result.append(model)
+        return result
+
+    # def __init__(self, tablenames, definitions, filters=None, models=None, fields=None, parent=None, joins=None, ons=None):
+    def __init__(self, *models, filters=None):
+        # self._definitions = definitions
+        # self.__fields = [definition[2]._get_field(definition[0]) for definition in definitions]
+        # self.__parent = parent
+        # self.__joins = joins if joins else []
+        # self.__ons = ons if ons else []
+        self.__models = list(models) # self._pack_models(models if models else [])
+        # print('MODELS', self.__models)
+        # self.__fields = fields if fields else []
+        # print('FIELDS', self.__fields)
+        # self._tablenames = tablenames
+        self._tablenames = [model._get_tablename() for model in self.__models]
+        self._fieldnames = []
+        # ts = []
+        # for definition in self._definitions:
+        #     if type(definition) == tuple:
+        #         if len(definition) >= 3:
+        #             ts.append(definition[2])
+        # print('TS', ts)
+        # self.__filters = filters if filters is not None else {}
+        # for definition in definitions:
+        #     if type(definition) == tuple:
+        #         self._fieldnames.append(definition[0])
+        self.__filters = filters if filters is not None else {}
+
+    # def _get_fieldnames(self):
+    #     # return self._fieldnames
+    #     # return self._fieldnames
+    #     result = []
+    #     for definition in self._definitions:
+    #         if type(definition) == tuple:
+    #             result.append(definition[0])
+    #             # if len(definition) >= 3:
+    #             #     print('TABLENAME', definition[2])
+    #     return result
+
+    # @property
+    # def names(self):
+    #     return self._get_fieldnames()
+
+    def _get_sql(self):
+        # tablename = self.__parent._get_tablename()
+
+        if not self.__models:
+            raise Exception('No models')
+        tablename = self.__models[0]._get_tablename()
+
+        # ons = []
+        on = ''
+        # for model in self.__models:
+        #     for field in model._get_fields():
+        #         print('MODEL', model, 'FIELD', field)
+        # for definition in self._definitions:
+        #     if definition[3] and definition[3] in self._tablenames[1:]:
+        #         print('ON {}.{} = {}.id'.format(self._tablenames[0], definition[0], definition[3]))
+        # for model in self.__models:
+        #     for definition in model._get_field_definitions():
+        #         # print('!!!', definition, self.__parent, definition[2] is self.__parent)
+        #         if definition[3] and definition[2] is self.__parent:
+        #             on = ' ON {}.{} = {}.id'.format(definition[2]._get_tablename(), definition[0], definition[3]._get_tablename())
+        #             # print('ON', on)
+        # for join in self.__joins:
+        #     if isinstance(join, BaseModel)
+
+        if not self.__models:
+            raise Exception('No models')
+
+        # ons = []
+        # for field in self.__parent._get_fields():
+        #     for join in self.__joins:
+        #         if field.foreign is join:
+        #             ons.append('{}.{} = {}.id'.format(tablename, field.name, field.foreign._get_tablename()))
+
+        ons = []
+        for field in self.__models[0]._get_fields():
+            for join in self.__models[1:]:
+                if field.foreign is join:
+                    ons.append('{}.{} = {}.id'.format(tablename, field.name, field.foreign._get_tablename()))
+
+        # prefix = tablename+'.' if len(self.__joins) > 0 else ''
+        prefix = tablename+'.' if len(self.__models) > 1 else ''
+        where = ''
+        if len(self.__filters) > 0:
+            where = ' WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self.__filters.items()]))
+
+        return 'SELECT {select} FROM {from_}{on}{where}'.format(
+            # select=', '.join(self._get_fieldnames()),
+            # select=', '.join([prefix+field.name for field in self.__parent._get_fields()]),
+            select=', '.join([prefix+field.name for field in self.__models[0]._get_fields()]),
+            # on=on,
+            on=' ON '+' AND '.join(ons) if ons else '',
+            # from_=', '.join(self._tablenames),
+            # from_=', '.join([m._get_tablename() for m in [self.__parent]+self.__joins]),
+            from_=', '.join([m._get_tablename() for m in self.__models]),
+            where=where).strip()
+
+    @classmethod
+    def _execute(cls, query):
+        conn = connect()
+        c = conn.cursor()
+        c.execute(query)
+        conn.commit()
+        return c.fetchall()
+
+    # def _get_modified_copy(self, *models):
+    #     return QuerySet(self.__models + )
+
+    def _get_modified_copy(self, *models, **kwargs):
+        data = dict(
+            filters=self.__filters,
+        )
+        data.update(kwargs)
+        # models = self.__models + list(models)
+        models = list(models)
+        return QuerySet(*models, **data)
+
+        # data = dict(
+        #     tablenames=self._tablenames,
+        #     definitions=self._definitions,
+        #     filters=self.__filters,
+        #     models=self.__models,
+        #     parent=self.__parent,
+        #     joins=self.__joins,
+        #     # ons=self.__ons,
+        # )
+        # data.update(kwargs)
+        # return QuerySet(**data)
+
+    def filter(self, **filters):
+        # return self._get_modified_copy(filters = filters)
+        return self._get_modified_copy(*self.__models, filters = dict(chain(self.__filters.items(), filters.items())))
+        # _filters = deepcopy(self._filters)
+        # _filters.update(filters)
+        # return QuerySet(
+        #     tablenames=self._tablenames,
+        #     definitions=self._definitions,
+        #     filters=_filters,
+        #     models=self.__models,
+        #     parent=self.__parent,
+        # )
+
+    # def join(self, model):
+    #     return self._get_modified_copy(models=self._pack_models(self.__models + [model]))
+
+    def join(self, obj):
+
+        if isinstance(obj, BaseField):
+            if obj.model is self.__models[0]:
+                return self._get_modified_copy()
+            return self._get_modified_copy(*(self._pack_models(self.__models+[obj.model])))
+            # return self._get_modified_copy(
+            #     fields=self.__fields+[obj] if obj not in self.__fields else self.__fields,
+            #     models=self._pack_models(self.__models+[obj.model]),
+            #     # joins=pack(self.__joins+[obj.model])
+            #     joins=self.__joins+[obj.model],
+            #     # joins=list(OrderedDict.fromkeys(self.__joins+[obj.model])),
+            #     # ons=list(OrderedDict.fromkeys(self.__ons+[obj])),
+            # )
+        elif issubclass(obj, BaseModel):
+            models = self._pack_models(self.__models + [obj]) # FIXME pack
+            return self._get_modified_copy(*models)
+            # on = None
+            # return self._get_modified_copy(
+            #     models=self._pack_models(self.__models+[obj]),
+            #     # joins=list(OrderedDict.fromkeys(self.__joins + [obj])),
+            #     # ons=list(OrderedDict.fromkeys(self.__ons + [])),
+            # )
+        else:
+            raise TypeError('JOIN', type(obj))
+        # # print('JOIN DEFS', self._definitions, 'models', self.__models),
+        # return QuerySet(
+        #     tablenames=self._tablenames+[model._get_tablename()],
+        #     definitions=self._definitions,
+        #     filters=self._filters,
+        #     models=self._pack_models(self.__models+[model]),
+        #     parent=self.__parent,
+        # )
+
+    def all(self):
+        if not self.__models:
+            raise Exception('No models')
+
+        # return [self.__parent(record=record) for record in self._execute(self._get_sql())]
+        return [self.__models[0](record=record) for record in self._execute(self._get_sql())]
+
+    def values(self):
+        return self._execute(self._get_sql())
+
+    @property
+    def sql(self):
+        return self._get_sql()
 
 
 # class FirstModel(BaseModel):
