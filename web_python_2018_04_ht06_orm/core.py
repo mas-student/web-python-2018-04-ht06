@@ -15,6 +15,11 @@ def pack(values):
 def escape():
     pass
 
+# def pprint():
+#     from pprint import pformat
+#     print('__DICT__', pformat(self.__dict__))
+#     print('LOCALS', pformat(locals()))
+
 # def _execute(query, tablename, existed=True):
 #     # raise LookupError('Table {} does not exist'.format(cls._get_tablename()))
 #     conn = connect()
@@ -425,7 +430,7 @@ class BaseModel:
 
     @classmethod
     def _delete(cls, pk, **values):
-        print('_DELETE', pk, values)
+        # print('_DELETE', pk, values)
         query = 'DELETE FROM {} WHERE id == "{}";'.format(cls._get_tablename(), pk)
         return cls._execute(query)
 
@@ -587,9 +592,9 @@ class QuerySet:
     #     return self._get_fieldnames()
 
     def _get_sql(self):
-        print('_GET_SQL', self)
-        print('MODELS', self.__models)
-        print('JOINS', self.__joins)
+        # print('_GET_SQL', self)
+        # print('MODELS', self.__models)
+        # print('JOINS', self.__joins)
 
         # tablename = self.__parent._get_tablename()
 
@@ -623,7 +628,8 @@ class QuerySet:
 
         main_tablename = self.__models[0]._get_tablename()
 
-        tablenames = [self.__models[0]._get_tablename()]
+        # tablenames = [self.__models[0]._get_tablename()]
+        tablenames = [model._get_tablename() for model in self.__models]
         for join in self.__joins:
             if type(join) == type and issubclass(join, BaseModel):
                 tablename = join._get_tablename()
@@ -637,8 +643,8 @@ class QuerySet:
         # for model in self.__models:
         #     tablenames.append(model._get_tablename())
         from_ = ', '.join(tablenames)
-        print('TABLENAMES', tablenames)
-        print('FROM_', from_)
+        # print('TABLENAMES', tablenames)
+        # print('FROM_', from_)
 
         ons = []
         for field in self.__models[0]._get_fields():
@@ -665,15 +671,25 @@ class QuerySet:
 
         # prefix = tablename+'.' if len(self.__joins) > 0 else ''
         # prefix = tablename+'.' if len(self.__models) > 1 else ''
-        prefix = main_tablename+'.' if len(self.__models) > 1 else ''
+        # prefix = main_tablename+'.' if len(self.__models + self.__joins) > 1 else ''
+        fields = []
+        for model in self.__models:
+            prefix = model._get_tablename() + '.' if len(self.__models + self.__joins) > 1 else ''
+            fields += [prefix+field.name for field in model._get_fields()]
+        select = ', '.join(fields)
+
         where = ''
         if len(self.__filters) > 0:
             where = ' WHERE {}'.format(', '.join(['{} == "{}"'.format(name, value) for name, value in self.__filters.items()]))
 
+        # from pprint import pformat # FIXME
+        # print('__DICT__', pformat(self.__dict__))
+        # print('LOCALS', pformat(locals()))
         sql = 'SELECT {select} FROM {from_}{on}{where}'.format(
             # select=', '.join(self._get_fieldnames()),
             # select=', '.join([prefix+field.name for field in self.__parent._get_fields()]),
-            select=', '.join([prefix+field.name for field in self.__models[0]._get_fields()]),
+            # select=', '.join([prefix+field.name for field in self.__models[0]._get_fields()]),
+            select=select,
             # on=on,
             on=' ON '+' AND '.join(ons) if ons else '',
             # from_=', '.join(self._tablenames),
@@ -681,7 +697,7 @@ class QuerySet:
             # from_=', '.join([m._get_tablename() for m in self.__models]),
             from_=from_,
             where=where).strip()
-        print('SQL', sql)
+        # print('SQL', sql)
 
         return sql
 
@@ -704,7 +720,7 @@ class QuerySet:
         data.update(kwargs)
         # models = self.__models + list(models)
         models = list(models)
-        print('MODELS', models)
+        # print('MODELS', models)
         return QuerySet(*models, **data)
 
         # data = dict(
@@ -741,9 +757,10 @@ class QuerySet:
             if not obj.foreign:
                 return self._get_modified_copy()
 
-            models = self._pack_models(self.__models + [obj.foreign]) # FIXME pack
+            # models = self._pack_models(self.__models + [obj.foreign]) # FIXME pack
 
-            return self._get_modified_copy(*models, joins=self.__joins+[obj])
+            # return self._get_modified_copy(*models, joins=self.__joins+[obj])
+            return self._get_modified_copy(*self.__models, joins=self.__joins+[obj])
 
             # if obj.model is self.__models[0]:
             #     return self._get_modified_copy()
@@ -760,7 +777,8 @@ class QuerySet:
             # )
         elif issubclass(obj, BaseModel):
             models = self._pack_models(self.__models + [obj]) # FIXME pack
-            return self._get_modified_copy(*models, joins=self.__joins+[obj])
+            # return self._get_modified_copy(*models, joins=self.__joins+[obj])
+            return self._get_modified_copy(*self.__models, joins=self.__joins+[obj])
             # on = None
             # return self._get_modified_copy(
             #     models=self._pack_models(self.__models+[obj]),
