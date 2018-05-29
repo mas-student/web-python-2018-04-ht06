@@ -15,9 +15,9 @@ def pack(values):
 def escape():
     pass
 
-def dump(obj):
+def dump(self):
     from pprint import pformat # FIXME
-    print('__DICT__', pformat(obj.__dict__))
+    print('__DICT__', pformat(self.__dict__))
     print('LOCALS', pformat(locals()))
 
 
@@ -126,6 +126,10 @@ class BaseModel:
             if isinstance(value, BaseField):
                 fields.append(getattr(cls, key))
         return sorted(fields, key=lambda field: field.name)
+
+    @classmethod
+    def get_fields(cls):
+        return cls._get_fields()
 
     @classmethod
     def _get_field(cls, name):
@@ -291,7 +295,10 @@ class BaseModel:
             setattr(self, name, value)
 
     def _get_pk(self):
-        return self.id
+        if not hasattr(self, 'id'):
+            raise AttributeError('id does not exist')
+
+        return getattr(self, 'id')
 
     def _get_values(self):
         return tuple([self._values.get(field.name) for field in type(self)._get_fields()])
@@ -341,8 +348,21 @@ class QuerySet:
                 result.append(model)
         return result
 
-    def __init__(self, *models, joins=None, filters=None):
-        self.__models = list(models)
+    def __init__(self, *objs, joins=None, filters=None):
+        # print('OBJS', objs)
+        self.__fields = []
+        self.__models = []
+        for obj in objs:
+            if isinstance(obj, BaseField):
+                self.__fields.append(obj)
+                self.__models.append(obj.model)
+            elif type(obj) == type and issubclass(obj, BaseModel):
+                self.__models.append(obj)
+        if len(self.__models) == 0:
+            raise Exception('Models are not defined')
+        if len(self.__fields) == 0:
+            self.__fields = sum([model.get_fields() for model in self.__models], [])
+        # self.__models = list(models)
         self.__joins = joins if joins is not None else []
         self._tablenames = [model._get_tablename() for model in self.__models]
         self._fieldnames = []
@@ -368,7 +388,8 @@ class QuerySet:
         from_ = ', '.join(tablenames)
 
         ons = []
-        for field in self.__models[0]._get_fields():
+        # for field in self.__models[0]._get_fields():
+        for field in self.__fields:
             for join in self.__joins:
                 if type(join) == type and issubclass(join, BaseModel):
                     foreign = join
@@ -379,11 +400,23 @@ class QuerySet:
                 if field.foreign is foreign:
                     ons.append('{}.{} = {}.id'.format(main_tablename, field.name, foreign._get_tablename()))
 
-        fields = []
-        for model in self.__models:
-            prefix = model._get_tablename() + '.' if len(self.__models + self.__joins) > 1 else ''
-            fields += [prefix+field.name for field in model._get_fields()]
-        select = ', '.join(fields)
+        # fields = []
+        # for model in self.__models:
+        #     prefix = model._get_tablename() + '.' if len(self.__models + self.__joins) > 1 else ''
+        #     fields += [prefix+field.name for field in model._get_fields()]
+        #     # fields += [prefix + field.name for field in model._get_fields() if field.name != 'id']
+        # select = ', '.join(fields)
+
+        fieldnames = []
+        for field in self.__fields:
+            prefix = field.model._get_tablename() + '.' if len(self.__models + self.__joins) > 1 else ''
+            fieldnames.append(prefix + field.name)
+            # fields += [prefix+field.name for field in model._get_fields()]
+        select = ', '.join(fieldnames)
+
+        # from pprint import pformat  # FIXME
+        # print('__DICT__', pformat(self.__dict__))
+        # print('LOCALS', pformat(locals()))
 
         where = ''
         if len(self.__filters) > 0:
