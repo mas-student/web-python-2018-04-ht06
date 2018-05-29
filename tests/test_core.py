@@ -2,7 +2,10 @@ from sqlite3 import OperationalError
 from unittest import TestCase, mock
 from unittest.mock import patch
 
-from web_python_2018_04_ht06_orm.core import connect, BaseModel, BaseField, QuerySet
+from web_python_2018_04_ht06_orm.core import initOrm, connect, BaseModel, BaseField, QuerySet
+
+
+initOrm('local.db')
 
 
 class StubParentModel(BaseModel):
@@ -26,6 +29,10 @@ class StubFieldModel(BaseModel):
 class TestCore(TestCase):
     def test_connect(self):
         self.assertIsNotNone(connect())
+
+    def test_columns(self):
+        StubParentModel.migrate()
+        self.assertEqual(list(map(lambda t: t[1], StubParentModel._get_column_names())), ['id', 'int1', 'str1'])
 
 
 class TestBaseField(TestCase):

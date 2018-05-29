@@ -5,8 +5,12 @@ from functools import reduce
 import sqlite3
 
 
+def initOrm(database):
+    global ORM_DATABASE
+    ORM_DATABASE=database
+
 def connect(): # FIXME
-    conn = sqlite3.connect('local.db')
+    conn = sqlite3.connect(ORM_DATABASE)
     return conn
 
 def pack(values):
@@ -15,7 +19,7 @@ def pack(values):
 def escape():
     pass
 
-def dump(self):
+def dump(self): # FIXME
     from pprint import pformat # FIXME
     print('__DICT__', pformat(self.__dict__))
     print('LOCALS', pformat(locals()))
@@ -155,23 +159,6 @@ class BaseModel:
         return [getattr(cls, name).definition for name in cls._get_class_attr_names()]
 
     @classmethod
-    def all(cls):
-        return cls._execute('SELECT * FROM {}'.format(cls._get_tablename()))
-
-    @classmethod
-    def first(cls, id):
-        return cls._first(id)
-
-    @classmethod
-    def get(cls, id):
-        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), id))
-
-        if len(records) == 0:
-            raise Exception('{} has not record with id = {}'.format(cls.__name__, id))
-
-        return cls(record=records[0])
-
-    @classmethod
     def query(cls, *fields):
         return QuerySet(
             cls
@@ -233,6 +220,27 @@ class BaseModel:
             print(e)
 
     @classmethod
+    def _get_column_names(cls, tablename=None):
+        if tablename is None:
+            tablename = cls._get_tablename()
+        return cls._execute("PRAGMA table_info({})".format(tablename))
+
+    def _check_columns(cls, columns):
+        for column in columns:
+            tablename = column.split('.')[0] if '.' in column else cls._get_tablename()
+            columnname = column.split('.')[-1]
+            if columnname not in cls._get_column_names(tablename=tablename):
+                raise Exception('Column does not exist')
+
+    @classmethod
+    def _select(cls, columns, tables, on=None, where=None):
+
+
+        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), pk))
+        if records:
+            return records[0]
+
+    @classmethod
     def _first(cls, pk):
         records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), pk))
         if records:
@@ -260,6 +268,24 @@ class BaseModel:
     def _delete(cls, pk, **values):
         query = 'DELETE FROM {} WHERE id == "{}";'.format(cls._get_tablename(), pk)
         return cls._execute(query)
+
+    @classmethod
+    def all(cls):
+        return cls._execute('SELECT * FROM {}'.format(cls._get_tablename()))
+
+    @classmethod
+    def first(cls, id):
+        return cls._first(id)
+
+    @classmethod
+    def get(cls, id):
+        records = cls._execute('SELECT * FROM {} WHERE id = "{}"'.format(cls._get_tablename(), id))
+
+        if len(records) == 0:
+            raise Exception('{} has not record with id = {}'.format(cls.__name__, id))
+
+        return cls(record=records[0])
+
 
     @classmethod
     def create(cls):
