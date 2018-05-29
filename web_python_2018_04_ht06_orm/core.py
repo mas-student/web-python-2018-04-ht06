@@ -432,6 +432,10 @@ class QuerySet:
         else:
             raise TypeError('JOIN', type(obj))
 
+    @property
+    def sql(self):
+        return self._get_sql()
+
     def all(self):
         if not self.__models:
             raise Exception('No models')
@@ -441,9 +445,6 @@ class QuerySet:
     def values(self):
         return self._execute(self._get_sql())
 
-    @property
-    def sql(self):
-        return self._get_sql()
 
 
 def main():
